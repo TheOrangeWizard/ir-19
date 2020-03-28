@@ -1,26 +1,28 @@
-from quarry.net.auth import Profile
-from quarry.net.client import ClientFactory, SpawningClientProtocol
-from twisted.internet import reactor, defer
-from twisted.internet.protocol import ReconnectingClientFactory
+import config
+import sys
+import time
+import json
+import datetime
 import discord
 from discord.ext import commands
-import time
-import datetime
-import threading
-import config
-import queue
 
-buffer = 100
-mc_queue = queue.Queue(buffer)
-ds_queue = queue.Queue(buffer)
+from minecraft import authentication
+from minecraft.exceptions import YggdrasilError
+from minecraft.networking.connection import Connection
+from minecraft.networking import packets
+
+########
+# misc #
+########
+
 
 def timestring():
     mtime = datetime.datetime.now()
-    return "[{:%H:%M:%S}] ".format(mtime)
+    return "[{:%H:%M:%S}]".format(mtime)
 
 def datestring():
     mtime = datetime.datetime.now()
-    return "[{:%d/%m/%y}] ".format(mtime)
+    return "[{:%d/%m/%y}]".format(mtime)
 
 
 def add_association(acct1, acct2):
@@ -38,7 +40,7 @@ def add_association(acct1, acct2):
         lines.append(acct1.lower() + " " + acct2.lower() + "\n")
     with open("data/accounts.txt", "w") as accts:
         for line in lines:
-            accts.write(line)
+            accts.write(line.lower())
     return True
 
 
@@ -46,148 +48,119 @@ def get_associations(acct):
     with open("data/accounts.txt", "r") as accts:
         lines = accts.readlines()
     for line in lines:
-        if acct.lower() in line:
-            return line.strip("\n")
+        if str(acct).lower() in line:
+            return line.strip("\n").split(" ")
+    return []
 
 
-class IRClientProtocol(SpawningClientProtocol):
-    def setup(self):
-        self.players = {}
-        print("irclientprotocol setup debug message")
+def parse(obj):
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, list):
+        return "".join((parse(e) for e in obj))
+    if isinstance(obj, dict):
+        text = ""
+        if "text" in obj:
+            text += obj["text"]
+        if "extra" in obj:
+            text += parse(obj["extra"])
+        return text
 
-    # server bound packets
-    def send_chat(self, text):
-        if len(text) > 225:
-            print("message too long")
-        else:
-            self.send_packet("chat_message", self.buff_type.pack_string(text))
-
-    # client bound packets
-    def packet_chat_message(self, buff):
-        p_text = buff.unpack_chat()
-        p_position = buff.unpack("B")
-        print(timestring() + str(p_text))
-        l_text = str(p_text).split()
-
-    def packet_player_list_item(self, buff):
-        login_time = str(int(time.time()))
-        p_action = buff.unpack_varint()
-        p_count = buff.unpack_varint()
-        for i in range(p_count):
-            p_uuid = buff.unpack_uuid()
-            if p_action == 0:  # ADD_PLAYER
-                p_player_name = buff.unpack_string()
-                p_properties_count = buff.unpack_varint()
-                p_properties = {}
-                for j in range(p_properties_count):
-                    p_property_name = buff.unpack_string()
-                    p_property_value = buff.unpack_string()
-                    p_property_is_signed = buff.unpack('?')
-                    if p_property_is_signed:
-                        p_property_signature = buff.unpack_string()
-                    p_properties[p_property_name] = p_property_value
-                p_gamemode = buff.unpack_varint()
-                p_ping = buff.unpack_varint()
-                p_has_display_name = buff.unpack('?')
-                if p_has_display_name:
-                    p_display_name = buff.unpack_chat()
-                else:
-                    p_display_name = None
-                if p_ping != -1:
-                    self.players[p_uuid] = {"name": p_player_name,
-                                            "properties": p_properties,
-                                            "gamemode": p_gamemode,
-                                            "ping": p_ping,
-                                            "display_name": p_display_name,
-                                            "login_time": login_time}
-            elif p_action == 1:  # UPDATE_GAMEMODE
-                p_gamemode = buff.unpack_varint()
-                if p_uuid in self.players:
-                    self.players[p_uuid]['gamemode'] = p_gamemode
-            elif p_action == 2:  # UPDATE_LATENCY
-                p_ping = buff.unpack_varint()
-                if p_uuid in self.players:
-                    self.players[p_uuid]['ping'] = p_ping
-            elif p_action == 3:  # UPDATE_DISPLAY_NAME
-                p_has_display_name = buff.unpack('?')
-                if p_has_display_name:
-                    p_display_name = buff.unpack_chat()
-                else:
-                    p_display_name = None
-                if p_uuid in self.players:
-                    self.players[p_uuid]['display_name'] = p_display_name
-            elif p_action == 4:  # REMOVE_PLAYER
-                if p_uuid in self.players and self.players[p_uuid]["ping"] != -1:
-                    del self.players[p_uuid]
-
-    def packet_disconnect(self, buff):
-        p_text = buff.unpack_chat()
-        print(timestring() + str(p_text))
-
-    # callbacks
-    def player_joined(self):
-        print(timestring() + "joined the game as " + self.factory.profile.display_name + ".")
-        self.ticker.add_loop(10, self.process_mc_queue)
-
-    # methods
-    def process_mc_queue(self):
-        if not mc_queue.empty():
-            package = mc_queue.get()
-            if package["key"] == "test":
-                self.send_chat("/g sa-ii test")
-
-
-class IRClientFactory(ReconnectingClientFactory, ClientFactory):
-    protocol = IRClientProtocol
-
-    def startedConnecting(self, connector):
-        self.maxDelay = 60
-        print(timestring() + "connecting to " + connector.getDestination().host + "...")
-        # print (self.__getstate__())
-
-    def clientConnectionFailed(self, connector, reason):
-        print("connection failed: " + str(reason))
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-    def clientConnectionLost(self, connector, reason):
-        print(timestring() + "disconnected:" + str(reason).split(":")[-1][:-2])
-        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-@defer.inlineCallbacks
-def mc_main():
-    profile = yield Profile.from_credentials(config.username, config.password)
-    factory = IRClientFactory(profile)
-    try:
-        factory = yield factory.connect(config.host, config.port)
-    except Exception as e:
-        print(e)
 
 #################
 # discord stuff #
 #################
+
+
 prefix = "$"
 motd = "large chungi"
 
 bot = commands.Bot(command_prefix=prefix, description=motd)
 
 
-async def process_discord_queue():
-    await bot.wait_until_ready()
-    while not bot.is_logged_in or not bot.is_closed:
-        # print ("discord loop alive")
-        if not ds_queue.empty():
-            package = ds_queue.get()
+async def roleconfig_update(rgroup):
+    group = rgroup.lower()
+    print(timestring(), "updating group permissions for", group)
+
+    roleconfigs = {}
+    with open("data/roleconfig.txt") as rc:
+        for line in rc.readlines():
+            try:
+                i = line.lower().strip("\n").split(" ")
+                try:
+                    roleconfigs[int(i[0])][i[1]] = i[2]
+                except KeyError:
+                    roleconfigs[int(i[0])] = {i[1]: i[2]}
+            except:
+                pass
+    # print(roleconfigs)
+
+    groupconfig = {}
+    for member in bot.get_guild(config.guild).members:
+        for account in get_associations(member.id):
+            if not len(account) > 16:
+                for role in member.roles:
+                    try:
+                        groupconfig[account] = roleconfigs[role.id]
+                    except:
+                        pass
+    # print(groupconfig)
+
+    batch = []
+    for account in groupconfig.keys():
+        if not len(account) > 16:
+            try:
+                cfg = groupconfig[account][group].lower()
+            except KeyError:
+                print(timestring(), group, "not configured")
+                return
+            try:
+                nlg = nllm["data"][group][account]
+                if not cfg == nlg:
+                    batch.append("/nlpp " + group + " " + account + " " + groupconfig[account][group])
+            except:
+                batch.append("/nlip " + group + " " + account + " " + groupconfig[account][group])
+
+    for account in nllm["data"][group].keys():
+        if not account in groupconfig.keys():
+            batch.append("/nlrm " + group + " " + account)
+
+    # print(batch)
+
+
+@bot.event
+async def on_ready():
+    print(timestring(), "Connected to discord as", bot.user.name)
+    print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
 
 
 @bot.command(pass_context=True)
 async def test(ctx):
     """test"""
-    await ctx.channel.send("test")
-    mc_queue.put({"key":"test"})
+    await ctx.channel.send(".")
 
 
 @bot.command(pass_context=True)
+@commands.has_permissions(administrator=True)
+async def send(ctx, *, arg):
+    """send ingame chat"""
+    await ctx.channel.send("saying `" + arg + "` ingame")
+    send_chat(arg)
+
+
+@bot.command(pass_context=True)
+@commands.has_permissions(administrator=True)
+async def shutdown(ctx):
+    """shuts the bot down"""
+    await ctx.channel.send("emergency shutdown invoked")
+    connection.disconnect(immediate=True)
+    await bot.close()
+
+
+@bot.command(pass_context=True)
+@commands.has_permissions(manage_messages=True)
 async def associate(ctx, *args):
+    """associates the second given account with the first"""
     if len (args) > 1:
         arg1 = args[0]
         if arg1 == "me":
@@ -208,12 +181,14 @@ async def associate(ctx, *args):
                 else:
                     await ctx.channel.send(n + " already associcated with " + arg)
 
+
 @bot.command(pass_context=True)
 async def associations(ctx, *args):
+    """get the current account associations for a given minecraft username or discord id"""
     if len (args) > 0:
         for arg in args:
             try:
-                assc = get_associations(arg).split(" ")
+                assc = get_associations(arg)
                 message = ""
                 for a in assc:
                     try:
@@ -250,6 +225,7 @@ async def get(ctx):
 
 
 @roleconfig.command(pass_context=True)
+@commands.has_permissions(manage_messages=True)
 async def add(ctx, *args):
     """add a line to role-group configuration"""
     with open("data/roleconfig.txt", "r") as rc:
@@ -265,15 +241,103 @@ async def add(ctx, *args):
         rcs.append(" ".join(args) + "\n")
     with open("data/roleconfig.txt", "w") as rc:
         for line in rcs:
-            rc.write(line)
+            rc.write(line.lower())
     await ctx.channel.send("added config `" + " ".join(args) + "`")
 
-#######
-# run #
-#######
 
-if __name__ == "__main__":
-    mc_main()
-    mcThread = threading.Thread(target=reactor.run, kwargs={"installSignalHandlers":0})
-    mcThread.start()
-    bot.run(config.token)
+@roleconfig.command(pass_context=True)
+@commands.has_permissions(manage_messages=True)
+async def update(ctx):
+    """updates"""
+    await ctx.channel.send("updating roleconfig...")
+    await roleconfig_update()
+
+
+#############
+# minecraft #
+#############
+
+
+def exception_handler(exc):
+    if type(exc) == EOFError:
+        print(timestring(), "unexpected end of message while reading packet, disconnecting")
+        connection.disconnect(immediate=True)
+        while True:
+            try:
+                print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
+                time.sleep(config.reconnect_timer)
+                connection.connect()
+            except ConnectionRefusedError:
+                print(timestring(), "target machine refused connection")
+
+
+nllm = {"group": "", "time":0, "data": {}}
+auth_token = authentication.AuthenticationToken()
+try:
+    auth_token.authenticate(config.username, config.password)
+except YggdrasilError as e:
+    print(e)
+    sys.exit()
+
+print(timestring(), "authenticated...")
+connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=exception_handler)
+
+
+def send_chat(message):
+    sm = message.split(" ")
+    if len(sm) == 2 and sm[0] == "/nllm":
+        print(timestring(), "waiting for nllm data for group", sm[1])
+        nllm["group"] = sm[1].lower()
+        nllm["data"][sm[1].lower()] = {}
+        nllm["time"] = time.time()
+    print(timestring(), "ingame:", message)
+    packet = packets.serverbound.play.ChatPacket()
+    packet.message = message
+    connection.write_packet(packet)
+
+
+def on_incoming(incoming_packet):
+    if not nllm["group"] == "":
+        if nllm["time"] < time.time() - config.nllm_timeout:
+            print(timestring(), "nllm data received")
+            bot.loop.create_task(roleconfig_update(nllm["group"].lower()))
+            print(nllm)
+            nllm["group"] = ""
+
+
+def respawn():
+    packet = packets.serverbound.play.ClientStatusPacket()
+    packet.action_id = packets.serverbound.play.ClientStatusPacket.RESPAWN
+    connection.write_packet(packet)
+
+
+def on_join_game(join_game_packet):
+    print(timestring(), "connected to", config.host, "as", auth_token.profile.name)
+
+
+def on_chat(chat_packet):
+    source = chat_packet.field_string('position')
+    raw_chat = json.loads(str(chat_packet.json_data))
+    chat = parse(raw_chat)
+    words = chat.split(" ")
+    print(timestring(), source, chat)
+    if config.relay_chat:
+        bot.loop.create_task(bot.get_channel(config.spam_channel).send(chat))
+    if not nllm["group"] == "":
+        if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
+            nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
+
+def on_disconnect(disconnect_packet):
+    print(timestring(), "pycraft disconnected")
+    print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
+    time.sleep(config.reconnect_timer)
+    connection.connect()
+
+
+connection.register_packet_listener(on_incoming, packets.Packet, early=True)
+connection.register_packet_listener(on_join_game, packets.clientbound.play.JoinGamePacket)
+connection.register_packet_listener(on_chat, packets.clientbound.play.ChatMessagePacket)
+connection.register_packet_listener(on_disconnect, packets.clientbound.play.DisconnectPacket)
+
+connection.connect()
+bot.run(config.token)
