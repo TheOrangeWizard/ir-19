@@ -63,6 +63,8 @@ def parse(obj):
         text = ""
         if "text" in obj:
             text += obj["text"]
+        if "announcement" in obj:
+            text += obj["announcement"]
         if "extra" in obj:
             text += parse(obj["extra"])
         return text
@@ -146,12 +148,13 @@ async def roleconfig_update():
                 assert groupconfigs[account][group]
             except KeyError:
                 batch.append("/nlrm " + group + " " + account)
-
-    m = "the following commands will be queued for execution:"
-    for i in batch:
-        m += "\n" + i
-    print(m)
-    await bot.get_channel(config.spam_channel).send(clean(m))
+    global chat_batch
+    chat_batch += batch
+    # m = "the following commands will be queued for execution:"
+    # for i in batch:
+    #     m += "\n" + i
+    # print(m)
+    # await bot.get_channel(config.spam_channel).send(clean(m))
 
 @bot.event
 async def on_ready():
@@ -284,7 +287,7 @@ async def update(ctx):
             except:
                 pass
     nllm["queue"] = queue
-    await ctx.channel.send("updating roleconfig for groups:\n" + "\n".join(queue))
+    await ctx.channel.send("updating roleconfig for " + ", ".join(queue))
     send_chat("/nllm " + queue.pop())
 
 
@@ -296,19 +299,20 @@ async def update(ctx):
 nllm = {"queue": [], "group": "", "time":0, "data": {}}
 auth_token = authentication.AuthenticationToken()
 chat_batch = []
+chat_timer = 0
 
 
 def exception_handler(exc):
-    if type(exc) == EOFError:
-        print(timestring(), "unexpected end of message while reading packet, disconnecting")
-        connection.disconnect(immediate=True)
-        while True:
-            try:
-                print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
-                time.sleep(config.reconnect_timer)
-                connection.connect()
-            except ConnectionRefusedError:
-                print(timestring(), "target machine refused connection")
+    if connection.connected:
+        print(timestring(), exc)
+    else:
+        print(timestring(), "disconnected:", exc)
+        try:
+            print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
+            time.sleep(config.reconnect_timer)
+            connection.connect()
+        except ConnectionRefusedError:
+            print(timestring(), "target machine refused connection")
 
 
 try:
@@ -319,10 +323,6 @@ except YggdrasilError as e:
 
 print(timestring(), "authenticated...")
 connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=exception_handler)
-
-
-def batch_chat(batch):
-    pass
 
 
 def send_chat(message):
@@ -353,6 +353,11 @@ def on_incoming(incoming_packet):
             else:
                 nllm["group"] = nllm["queue"].pop()
                 send_chat("/nllm " + nllm["group"])
+    if len(chat_batch) > 1:
+        global chat_timer
+        if chat_timer < time.time() - config.batch_chat_delay:
+            send_chat(chat_batch.pop())
+            chat_timer = time.time()
 
 
 def respawn():
