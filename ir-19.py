@@ -67,6 +67,12 @@ def parse(obj):
         return text
 
 
+def clean(text):
+    text = text.replace("_", "\_")
+    text = text.replace("*", "\*")
+    text = text.replace("~~", "\~~")
+    return text
+
 #################
 # discord stuff #
 #################
@@ -74,59 +80,77 @@ def parse(obj):
 
 prefix = "$"
 motd = "large chungi"
+nl_ranks = ["none", "members", "mods", "admins", "owner"]
 
 bot = commands.Bot(command_prefix=prefix, description=motd)
 
 
-async def roleconfig_update(rgroup):
-    group = rgroup.lower()
-    print(timestring(), "updating group permissions for", group)
-
-    roleconfigs = {}
-    with open("data/roleconfig.txt") as rc:
-        for line in rc.readlines():
-            try:
-                i = line.lower().strip("\n").split(" ")
-                try:
-                    roleconfigs[int(i[0])][i[1]] = i[2]
-                except KeyError:
-                    roleconfigs[int(i[0])] = {i[1]: i[2]}
-            except:
-                pass
-    # print(roleconfigs)
-
-    groupconfig = {}
-    for member in bot.get_guild(config.guild).members:
-        for account in get_associations(member.id):
-            if not len(account) > 16:
-                for role in member.roles:
-                    try:
-                        groupconfig[account] = roleconfigs[role.id]
-                    except:
-                        pass
-    # print(groupconfig)
-
+async def roleconfig_update():
     batch = []
-    for account in groupconfig.keys():
-        if not len(account) > 16:
+    for group in nllm["data"].keys():
+        print(timestring(), "updating group permissions for", group)
+
+        roleconfigs = {}
+        with open("data/roleconfig.txt") as rc:
+            for line in rc.readlines():
+                try:
+                    i = line.lower().strip("\n").split(" ")
+                    try:
+                        roleconfigs[int(i[0])][i[1]] = i[2]
+                    except KeyError:
+                        roleconfigs[int(i[0])] = {i[1]: i[2]}
+                except:
+                    pass
+        # print(roleconfigs)
+
+        groupconfigs = {}
+        for member in bot.get_guild(config.guild).members:
+            hrank = 0
+            for role in member.roles:
+                for a in get_associations(member.id):
+                    account = a.lower()
+                    if not len(account) > 16:
+                        try:
+                            if account in groupconfigs.keys():
+                                if group in groupconfigs[account].keys():
+                                    rank = nl_ranks.index(roleconfigs[role.id][group])
+                                    if rank > hrank:
+                                        groupconfigs[account][group] = roleconfigs[role.id][group]
+                                    else:
+                                        pass
+                                else:
+                                    groupconfigs[account][group] = roleconfigs[role.id][group]
+                            else:
+                                groupconfigs[account] = {group: roleconfigs[role.id][group]}
+                        except:
+                            pass
+        # print(groupconfigs)
+
+        for a in groupconfigs.keys():
+            account = a.lower()
+            if not len(account) > 16:
+                try:
+                    cfg = groupconfigs[account][group].lower()
+                    try:
+                        nlg = nllm["data"][group][account]
+                        if not cfg == nlg:
+                            batch.append("/nlpp " + group + " " + account + " " + groupconfigs[account][group])
+                    except:
+                        batch.append("/nlip " + group + " " + account + " " + groupconfigs[account][group])
+                except KeyError:
+                    pass
+
+        for account in nllm["data"][group].keys():
             try:
-                cfg = groupconfig[account][group].lower()
+                assert groupconfigs[account][group]
             except KeyError:
-                print(timestring(), group, "not configured")
-                return
-            try:
-                nlg = nllm["data"][group][account]
-                if not cfg == nlg:
-                    batch.append("/nlpp " + group + " " + account + " " + groupconfig[account][group])
-            except:
-                batch.append("/nlip " + group + " " + account + " " + groupconfig[account][group])
+                batch.append("/nlrm " + group + " " + account)
 
-    for account in nllm["data"][group].keys():
-        if not account in groupconfig.keys():
-            batch.append("/nlrm " + group + " " + account)
-
-    # print(batch)
-
+    m = "the following commands will be queued for execution:"
+    for i in batch:
+        m += "\n" + i
+    print(m)
+    await bot.get_channel(config.spam_channel).send(clean(m))
 
 @bot.event
 async def on_ready():
@@ -144,7 +168,7 @@ async def test(ctx):
 @commands.has_permissions(administrator=True)
 async def send(ctx, *, arg):
     """send ingame chat"""
-    await ctx.channel.send("saying `" + arg + "` ingame")
+    await ctx.channel.send("saying `" + clean(arg) + "` ingame")
     send_chat(arg)
 
 
@@ -249,13 +273,28 @@ async def add(ctx, *args):
 @commands.has_permissions(manage_messages=True)
 async def update(ctx):
     """updates"""
-    await ctx.channel.send("updating roleconfig...")
-    await roleconfig_update()
+    queue = []
+    with open ("data/roleconfig.txt", "r") as rc:
+        for line in rc.readlines():
+            try:
+                g = line.strip("\n").split(" ")[1]
+                if not g.lower() in queue:
+                    queue.append(g.lower())
+            except:
+                pass
+    nllm["queue"] = queue
+    await ctx.channel.send("updating roleconfig for groups:\n" + "\n".join(queue))
+    send_chat("/nllm " + queue.pop())
 
 
 #############
 # minecraft #
 #############
+
+
+nllm = {"queue": [], "group": "", "time":0, "data": {}}
+auth_token = authentication.AuthenticationToken()
+chat_batch = []
 
 
 def exception_handler(exc):
@@ -271,8 +310,6 @@ def exception_handler(exc):
                 print(timestring(), "target machine refused connection")
 
 
-nllm = {"group": "", "time":0, "data": {}}
-auth_token = authentication.AuthenticationToken()
 try:
     auth_token.authenticate(config.username, config.password)
 except YggdrasilError as e:
@@ -281,6 +318,10 @@ except YggdrasilError as e:
 
 print(timestring(), "authenticated...")
 connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=exception_handler)
+
+
+def batch_chat(batch):
+    pass
 
 
 def send_chat(message):
@@ -299,10 +340,18 @@ def send_chat(message):
 def on_incoming(incoming_packet):
     if not nllm["group"] == "":
         if nllm["time"] < time.time() - config.nllm_timeout:
-            print(timestring(), "nllm data received")
-            bot.loop.create_task(roleconfig_update(nllm["group"].lower()))
-            print(nllm)
-            nllm["group"] = ""
+            if nllm["data"][nllm["group"]] == {}:
+                print(timestring(), "nllm timed out for group", nllm["group"])
+            else:
+                print(timestring(), "nllm data received for group", nllm["group"])
+            if len(nllm["queue"]) == 0:
+                print(timestring(), "nllm data collected for groups", ", ".join([key if nllm["data"][key] != {} else ""
+                                                                                 for key in nllm["data"].keys()]))
+                bot.loop.create_task(roleconfig_update())
+                nllm["group"] = ""
+            else:
+                nllm["group"] = nllm["queue"].pop()
+                send_chat("/nllm " + nllm["group"])
 
 
 def respawn():
