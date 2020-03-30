@@ -21,6 +21,7 @@ def timestring():
     mtime = datetime.datetime.now()
     return "[{:%H:%M:%S}]".format(mtime)
 
+
 def datestring():
     mtime = datetime.datetime.now()
     return "[{:%d/%m/%y}]".format(mtime)
@@ -156,9 +157,24 @@ async def roleconfig_update():
     # print(m)
     # await bot.get_channel(config.spam_channel).send(clean(m))
 
+
+async def check_online():
+    while True:
+        if not connection.connected:
+            await bot.change_presence(activity=None)
+            print(timestring(), "disconnected, reconnecting in", config.reconnect_timer, "seconds")
+            await asyncio.sleep(config.reconnect_timer)
+            try:
+                connection.connect()
+            except ConnectionRefusedError:
+                print(timestring(), "target machine refused connection")
+        else:
+            await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
+        await asyncio.sleep(10)
+
 @bot.event
 async def on_ready():
-    print(timestring(), "Connected to discord as", bot.user.name)
+    print(timestring(), "connected to discord as", bot.user.name)
     print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
 
 
@@ -302,19 +318,6 @@ chat_batch = []
 chat_timer = 0
 
 
-def exception_handler(exc):
-    if connection.connected:
-        print(timestring(), exc)
-    else:
-        print(timestring(), "disconnected:", exc)
-        try:
-            print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
-            time.sleep(config.reconnect_timer)
-            connection.connect()
-        except ConnectionRefusedError:
-            print(timestring(), "target machine refused connection")
-
-
 try:
     auth_token.authenticate(config.username, config.password)
 except YggdrasilError as e:
@@ -322,7 +325,7 @@ except YggdrasilError as e:
     sys.exit()
 
 print(timestring(), "authenticated...")
-connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=exception_handler)
+connection = Connection(config.host, config.port, auth_token=auth_token)
 
 
 def send_chat(message):
@@ -382,11 +385,9 @@ def on_chat(chat_packet):
         if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
             nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
 
+
 def on_disconnect(disconnect_packet):
-    print(timestring(), "pycraft disconnected")
-    print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
-    time.sleep(config.reconnect_timer)
-    connection.connect()
+    print(timestring(), "disconnect packet")
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
@@ -395,4 +396,5 @@ connection.register_packet_listener(on_chat, packets.clientbound.play.ChatMessag
 connection.register_packet_listener(on_disconnect, packets.clientbound.play.DisconnectPacket)
 
 connection.connect()
+bot.loop.create_task(check_online())
 bot.run(config.token)
