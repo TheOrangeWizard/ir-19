@@ -159,6 +159,7 @@ async def roleconfig_update():
 
 
 async def check_online():
+    global bot
     while True:
         if not connection.connected:
             await bot.change_presence(activity=None)
@@ -172,10 +173,12 @@ async def check_online():
             await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
         await asyncio.sleep(10)
 
+
 @bot.event
 async def on_ready():
     print(timestring(), "connected to discord as", bot.user.name)
     print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
+    bot.loop.create_task(check_online())
 
 
 @bot.command(pass_context=True)
@@ -387,7 +390,7 @@ def on_chat(chat_packet):
 
 
 def on_disconnect(disconnect_packet):
-    print(timestring(), "disconnect packet")
+    print(timestring(), "logged out from", config.host)
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
@@ -396,5 +399,4 @@ connection.register_packet_listener(on_chat, packets.clientbound.play.ChatMessag
 connection.register_packet_listener(on_disconnect, packets.clientbound.play.DisconnectPacket)
 
 connection.connect()
-bot.loop.create_task(check_online())
 bot.run(config.token)
