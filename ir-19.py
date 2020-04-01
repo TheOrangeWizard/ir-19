@@ -161,17 +161,20 @@ async def roleconfig_update():
 async def check_online():
     global bot
     while True:
-        if not connection.connected:
-            await bot.change_presence(activity=None)
-            print(timestring(), "disconnected, reconnecting in", config.reconnect_timer, "seconds")
-            await asyncio.sleep(config.reconnect_timer)
-            try:
-                connection.connect()
-            except ConnectionRefusedError:
-                print(timestring(), "target machine refused connection")
-        else:
-            await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
-        await asyncio.sleep(10)
+        try:
+            if not connection.connected:
+                await bot.change_presence(activity=None)
+                print(timestring(), "disconnected, reconnecting in", config.reconnect_timer, "seconds")
+                await asyncio.sleep(config.reconnect_timer)
+                try:
+                    connection.connect()
+                except ConnectionRefusedError:
+                    print(timestring(), "target machine refused connection")
+            else:
+                await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
+            await asyncio.sleep(10)
+        except:
+            pass
 
 
 @bot.event
@@ -321,6 +324,10 @@ chat_batch = []
 chat_timer = 0
 
 
+def handle_error(e):
+    print(e)
+
+
 try:
     auth_token.authenticate(config.username, config.password)
 except YggdrasilError as e:
@@ -328,7 +335,7 @@ except YggdrasilError as e:
     sys.exit()
 
 print(timestring(), "authenticated...")
-connection = Connection(config.host, config.port, auth_token=auth_token)
+connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
 
 
 def send_chat(message):
