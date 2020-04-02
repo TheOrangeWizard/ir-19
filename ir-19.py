@@ -1,11 +1,15 @@
 import config
+
 import sys
 import time
 import json
+import aiohttp
 import asyncio
+import aiofiles
 import datetime
 import discord
 from discord.ext import commands
+from PIL import Image, ImageEnhance
 
 from minecraft import authentication
 from minecraft.exceptions import YggdrasilError
@@ -87,6 +91,28 @@ motd = "large chungi"
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
 
 bot = commands.Bot(command_prefix=prefix, description=motd)
+
+
+async def download_file(url, outurl):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                f = await aiofiles.open(outurl, mode='wb')
+                await f.write(await resp.read())
+                await f.close()
+
+
+async def find_a_posted_image(ctx):
+    if len(ctx.message.attachments) == 0:
+        check_above = await ctx.message.channel.history(limit=14).flatten()
+        for o in check_above:
+            if len(o.attachments) != 0:
+                await download_file(o.attachments[0].url, 'output.png')
+                return True
+    else:
+        await download_file(ctx.message.attachments[0].url, 'output.png')
+        return True
+    return
 
 
 async def roleconfig_update():
@@ -188,6 +214,22 @@ async def on_ready():
 async def test(ctx):
     """test"""
     await ctx.channel.send(".")
+
+
+@bot.command(pass_context=True)
+async def enhance(ctx, *, arg):
+    """enhance"""
+    await find_a_posted_image(ctx)
+    try:
+        factor = int(arg)
+    except:
+        await ctx.channel.send("factor must be int")
+        return
+    output = Image.open("output.png")
+    enhancer = ImageEnhance.Brightness(output)
+    output = enhancer.enhance(1 + factor / 100)
+    output.save("output.png")
+    await ctx.channel.send(file=discord.File("output.png"))
 
 
 @bot.command(pass_context=True)
