@@ -199,8 +199,8 @@ async def check_online():
             else:
                 await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
             await asyncio.sleep(10)
-        except:
-            pass
+        except Exception as e:
+            print(e)
 
 
 @bot.event
@@ -339,7 +339,7 @@ async def add(ctx, *args):
 
 @roleconfig.command(pass_context=True)
 @commands.has_permissions(manage_messages=True)
-async def update(ctx):
+async def update(ctx, *args):
     """updates"""
     queue = []
     with open ("data/roleconfig.txt", "r") as rc:
@@ -368,6 +368,10 @@ chat_timer = 0
 
 def handle_error(exc):
     print(exc)
+    if not connection.connected:
+        print(timestring(), "connection lost")
+    else:
+        print(timestring(), "connection not lost")
 
 
 try:
