@@ -217,7 +217,7 @@ async def test(ctx):
 
 
 @bot.command(pass_context=True)
-async def enhance(ctx, *, arg):
+async def enhance(ctx, *, arg=25):
     """enhance"""
     await find_a_posted_image(ctx)
     try:
@@ -366,8 +366,8 @@ chat_batch = []
 chat_timer = 0
 
 
-def handle_error(e):
-    print(e)
+def handle_error(exc):
+    print(exc)
 
 
 try:
