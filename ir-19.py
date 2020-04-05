@@ -86,6 +86,7 @@ def clean(text):
 #################
 
 
+newstart = True
 prefix = "$"
 motd = "large chungi"
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
@@ -185,8 +186,9 @@ async def roleconfig_update():
 
 
 async def check_online():
-    global bot
-    while True:
+    global bot, newstart
+    print(timestring(), "discord ready debug message: check_online loop started")
+    while bot.is_ready():
         try:
             if not connection.connected:
                 await bot.change_presence(activity=None)
@@ -201,13 +203,28 @@ async def check_online():
             await asyncio.sleep(10)
         except Exception as e:
             print(e)
+    print(timestring(), "discord disconnect debug message: check_online loop ended")
+    newstart = True
 
 
 @bot.event
 async def on_ready():
+    global newstart
     print(timestring(), "connected to discord as", bot.user.name)
     print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
-    bot.loop.create_task(check_online())
+    if newstart:
+        bot.loop.create_task(check_online())
+        newstart = False
+
+
+@bot.event
+async def on_error(e):
+    print(timestring(), e)
+
+
+@bot.event
+async def on_disconnect():
+    print(timestring(), "disconnected from discord")
 
 
 @bot.command(pass_context=True)
