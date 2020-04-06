@@ -86,11 +86,8 @@ def clean(text):
 #################
 
 
-prefix = "$"
-motd = "large chungi"
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
-
-bot = commands.Bot(command_prefix=prefix, description=motd)
+bot = commands.Bot(command_prefix=config.prefix, description=config.motd)
 
 
 async def download_file(url, outurl):
