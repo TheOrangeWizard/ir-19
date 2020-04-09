@@ -395,6 +395,9 @@ def authenticate():
     connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
 
 
+authenticate()
+
+
 def send_chat(message):
     sm = message.split(" ")
     if len(sm) == 2 and sm[0] == "/nllm":
