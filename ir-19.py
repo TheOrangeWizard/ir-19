@@ -191,6 +191,7 @@ async def check_online():
                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
                 await asyncio.sleep(config.reconnect_timer)
                 try:
+                    authenticate()
                     print(timestring(), "connecting...")
                     connection.connect()
                 except ConnectionRefusedError:
@@ -198,7 +199,7 @@ async def check_online():
             else:
                 await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
         except Exception as e:
-            print(e)
+            print(timestring(), e)
 
 
 @bot.event
@@ -368,7 +369,6 @@ async def update(ctx, *args):
 
 
 nllm = {"queue": [], "group": "", "time":0, "data": {}}
-auth_token = authentication.AuthenticationToken()
 chat_batch = []
 chat_timer = 0
 
@@ -381,14 +381,18 @@ def handle_error(exc):
         print(timestring(), "connection not lost")
 
 
-try:
-    auth_token.authenticate(config.username, config.password)
-except YggdrasilError as e:
-    print(e)
-    sys.exit()
+auth_token = authentication.AuthenticationToken()
 
-print(timestring(), "authenticated...")
-connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
+
+def authenticate():
+    global connection
+    try:
+        auth_token.authenticate(config.username, config.password)
+    except YggdrasilError as e:
+        print(e)
+        sys.exit()
+    print(timestring(), "authenticated...")
+    connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
 
 
 def send_chat(message):
