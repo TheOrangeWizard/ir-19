@@ -191,7 +191,6 @@ async def check_online():
                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
                 await asyncio.sleep(config.reconnect_timer)
                 try:
-                    authenticate()
                     print(timestring(), "connecting...")
                     connection.connect()
                 except ConnectionRefusedError:
