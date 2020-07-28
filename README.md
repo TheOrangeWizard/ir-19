@@ -1,3 +1,3 @@
 # ir-19
 
-unfinished, use at your own risk
+discord-minecraft client interface bot using pyCraft and discord.py
