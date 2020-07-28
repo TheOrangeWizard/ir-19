@@ -3,13 +3,14 @@ import config
 import sys
 import time
 import json
+import queue
 import aiohttp
 import asyncio
 import aiofiles
 import datetime
 import discord
-from discord.ext import commands
-from PIL import Image, ImageEnhance
+from discord.ext import commands, tasks
+from threading import Thread
 
 from minecraft import authentication
 from minecraft.exceptions import YggdrasilError
@@ -19,6 +20,10 @@ from minecraft.networking import packets
 ########
 # misc #
 ########
+
+
+buffer = 100
+ds_queue = queue.Queue(buffer)
 
 
 def timestring():
@@ -90,26 +95,14 @@ nl_ranks = ["none", "members", "mods", "admins", "owner"]
 bot = commands.Bot(command_prefix=config.prefix, description=config.motd)
 
 
-async def download_file(url, outurl):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                f = await aiofiles.open(outurl, mode='wb')
-                await f.write(await resp.read())
-                await f.close()
-
-
-async def find_a_posted_image(ctx):
-    if len(ctx.message.attachments) == 0:
-        check_above = await ctx.message.channel.history(limit=14).flatten()
-        for o in check_above:
-            if len(o.attachments) != 0:
-                await download_file(o.attachments[0].url, 'output.png')
-                return True
-    else:
-        await download_file(ctx.message.attachments[0].url, 'output.png')
-        return True
-    return
+async def process_discord_queue():
+    while bot.is_ready():
+        # print("discord loop alive")
+        while not ds_queue.empty():
+            package = ds_queue.get()
+            if package["type"] == "CHAT":
+                await bot.get_channel(package["channel"]).send(clean(package["message"]))
+        await asyncio.sleep(0.5)
 
 
 async def roleconfig_update():
@@ -181,30 +174,31 @@ async def roleconfig_update():
     # await bot.get_channel(config.spam_channel).send(clean(m))
 
 
-async def check_online():
-    global bot
-    while True:
-        await asyncio.sleep(10)
-        try:
-            if not connection.connected:
-                await bot.change_presence(activity=None)
-                print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
-                await asyncio.sleep(config.reconnect_timer)
-                try:
-                    print(timestring(), "connecting...")
-                    connection.connect()
-                except ConnectionRefusedError:
-                    print(timestring(), "host refused connection")
-            else:
-                await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
-        except Exception as e:
-            print(timestring(), e)
+# async def check_online():
+#     global bot
+#     while True:
+#         await asyncio.sleep(10)
+#         try:
+#             if not connection.connected:
+#                 await bot.change_presence(activity=None)
+#                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
+#                 await asyncio.sleep(config.reconnect_timer)
+#                 try:
+#                     print(timestring(), "connecting...")
+#                     connection.connect()
+#                 except ConnectionRefusedError:
+#                     print(timestring(), "host refused connection")
+#             else:
+#                 await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
+#         except Exception as e:
+#             print(timestring(), e)
 
 
 @bot.event
 async def on_ready():
     print(timestring(), "connected to discord as", bot.user.name)
     print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
+    await process_discord_queue()
 
 
 @bot.event
@@ -221,22 +215,6 @@ async def on_disconnect():
 async def test(ctx):
     """test"""
     await ctx.channel.send(".")
-
-
-@bot.command(pass_context=True)
-async def enhance(ctx, *, arg=25):
-    """enhance"""
-    await find_a_posted_image(ctx)
-    try:
-        factor = int(arg)
-    except:
-        await ctx.channel.send("factor must be int")
-        return
-    output = Image.open("output.png")
-    enhancer = ImageEnhance.Brightness(output)
-    output = enhancer.enhance(1 + factor / 100)
-    output.save("output.png")
-    await ctx.channel.send(file=discord.File("output.png"))
 
 
 @bot.command(pass_context=True)
@@ -302,8 +280,10 @@ async def associations(ctx, *args):
 @bot.group(pass_context=True)
 async def roleconfig(ctx):
     """manage role-group configurations"""
-    if ctx.invoked_subcommand is None:
-        await ctx.channel.send("invalid subcommand")
+    await ctx.channel.send("roleconfig disabled, \
+    please contact your local information request officer if you believe this is in error")
+    # if ctx.invoked_subcommand is None:
+    #     await ctx.channel.send("invalid subcommand")
 
 
 @roleconfig.command(pass_context=True)
@@ -367,9 +347,19 @@ async def update(ctx, *args):
 #############
 
 
+auth_token = authentication.AuthenticationToken()
 nllm = {"queue": [], "group": "", "time":0, "data": {}}
 chat_batch = []
 chat_timer = 0
+
+
+def authenticate():
+    try:
+        auth_token.authenticate(config.username, config.password)
+    except YggdrasilError as e:
+        print(e)
+        sys.exit()
+    print(timestring(), "yggdrassil authenticated...")
 
 
 def handle_error(exc):
@@ -380,30 +370,17 @@ def handle_error(exc):
         print(timestring(), "connection not lost")
 
 
-auth_token = authentication.AuthenticationToken()
-
-
-def authenticate():
-    global connection
-    try:
-        auth_token.authenticate(config.username, config.password)
-    except YggdrasilError as e:
-        print(e)
-        sys.exit()
-    print(timestring(), "authenticated...")
-    connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
-
-
 authenticate()
+connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
 
 
 def send_chat(message):
-    sm = message.split(" ")
-    if len(sm) == 2 and sm[0] == "/nllm":
-        print(timestring(), "waiting for nllm data for group", sm[1])
-        nllm["group"] = sm[1].lower()
-        nllm["data"][sm[1].lower()] = {}
-        nllm["time"] = time.time()
+    # sm = message.split(" ")
+    # if len(sm) == 2 and sm[0] == "/nllm":
+    #     print(timestring(), "waiting for nllm data for group", sm[1])
+    #     nllm["group"] = sm[1].lower()
+    #     nllm["data"][sm[1].lower()] = {}
+    #     nllm["time"] = time.time()
     print(timestring(), "ingame:", message)
     packet = packets.serverbound.play.ChatPacket()
     packet.message = message
@@ -411,20 +388,20 @@ def send_chat(message):
 
 
 def on_incoming(incoming_packet):
-    if not nllm["group"] == "":
-        if nllm["time"] < time.time() - config.nllm_timeout:
-            if nllm["data"][nllm["group"]] == {}:
-                print(timestring(), "nllm timed out for group", nllm["group"])
-            else:
-                print(timestring(), "nllm data received for group", nllm["group"])
-            if len(nllm["queue"]) == 0:
-                print(timestring(), "nllm data collected for groups", ", ".join([key if nllm["data"][key] != {} else ""
-                                                                                 for key in nllm["data"].keys()]))
-                bot.loop.create_task(roleconfig_update())
-                nllm["group"] = ""
-            else:
-                nllm["group"] = nllm["queue"].pop()
-                send_chat("/nllm " + nllm["group"])
+    # if not nllm["group"] == "":
+    #     if nllm["time"] < time.time() - config.nllm_timeout:
+    #         if nllm["data"][nllm["group"]] == {}:
+    #             print(timestring(), "nllm timed out for group", nllm["group"])
+    #         else:
+    #             print(timestring(), "nllm data received for group", nllm["group"])
+    #         if len(nllm["queue"]) == 0:
+    #             print(timestring(), "nllm data collected for groups", ", ".join([key if nllm["data"][key] != {} else ""
+    #                                                                              for key in nllm["data"].keys()]))
+    #             bot.loop.create_task(roleconfig_update())
+    #             nllm["group"] = ""
+    #         else:
+    #             nllm["group"] = nllm["queue"].pop()
+    #             send_chat("/nllm " + nllm["group"])
     if len(chat_batch) > 1:
         global chat_timer
         if chat_timer < time.time() - config.batch_chat_delay:
@@ -449,21 +426,23 @@ def on_chat(chat_packet):
     words = chat.split(" ")
     print(timestring(), source, chat)
     if config.relay_chat:
-        bot.loop.create_task(bot.get_channel(config.spam_channel).send(chat))
-    if not nllm["group"] == "":
-        if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
-            nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
+        ds_queue.put({"type": "CHAT", "channel": config.spam_channel, "message": chat})
+    # if not nllm["group"] == "":
+    #     if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
+    #         nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
 
 
-def on_disconnect(disconnect_packet):
+def on_mc_disconnect(disconnect_packet):
     print(timestring(), "logged out from", config.host)
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
 connection.register_packet_listener(on_join_game, packets.clientbound.play.JoinGamePacket)
 connection.register_packet_listener(on_chat, packets.clientbound.play.ChatMessagePacket)
-connection.register_packet_listener(on_disconnect, packets.clientbound.play.DisconnectPacket)
+connection.register_packet_listener(on_mc_disconnect, packets.clientbound.play.DisconnectPacket)
 
-connection.connect()
-asyncio.get_event_loop().create_task(check_online())
-bot.run(config.token)
+
+if __name__ == "__main__":
+    connection.connect()
+    discordThread = Thread(target=bot.run, args=[config.token])
+    discordThread.run()
