@@ -4,9 +4,7 @@ import sys
 import time
 import json
 import queue
-import aiohttp
 import asyncio
-import aiofiles
 import datetime
 import discord
 from discord.ext import commands, tasks
@@ -91,18 +89,51 @@ def clean(text):
 #################
 
 
+class Loops(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.process_discord_queue.start()
+        self.update_tablists.start()
+        self.check_online.start()
+
+    @tasks.loop(seconds=1)
+    async def process_discord_queue(self):
+        package = ds_queue.get()
+        if package["type"] == "CHAT":
+            await self.bot.get_channel(package["channel"]).send(clean(package["message"]))
+
+    @tasks.loop(seconds=15)
+    async def update_tablists(self):
+        # print("tablist update loop debug message")
+        with open("tablists.txt", "r") as tablistfile:
+            for tablist in tablistfile.readlines():
+                tl = tablist.strip()
+                # print("tablist update loop debug message", tl)
+                message = await self.bot.fetch_message(int(tl))
+                await message.edit("player list placeholder content")
+
+    @tasks.loop(seconds=30)
+    async def check_online(self):
+        try:
+            if not connection.connected:
+                await self.bot.change_presence(activity=None)
+                print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
+                connection.auth_token.authenticate()
+                await asyncio.sleep(config.reconnect_timer)
+                try:
+                    print(timestring(), "connecting...")
+                    connection.connect()
+                except ConnectionRefusedError:
+                    print(timestring(), "host refused connection")
+            else:
+                await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
+        except Exception as e:
+            print(timestring(), e)
+
+
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
 bot = commands.Bot(command_prefix=config.prefix, description=config.motd)
-
-
-async def process_discord_queue():
-    while bot.is_ready():
-        # print("discord loop alive")
-        while not ds_queue.empty():
-            package = ds_queue.get()
-            if package["type"] == "CHAT":
-                await bot.get_channel(package["channel"]).send(clean(package["message"]))
-        await asyncio.sleep(0.5)
+bot.add_cog(Loops(bot))
 
 
 async def roleconfig_update():
@@ -174,31 +205,10 @@ async def roleconfig_update():
     # await bot.get_channel(config.spam_channel).send(clean(m))
 
 
-# async def check_online():
-#     global bot
-#     while True:
-#         await asyncio.sleep(10)
-#         try:
-#             if not connection.connected:
-#                 await bot.change_presence(activity=None)
-#                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
-#                 await asyncio.sleep(config.reconnect_timer)
-#                 try:
-#                     print(timestring(), "connecting...")
-#                     connection.connect()
-#                 except ConnectionRefusedError:
-#                     print(timestring(), "host refused connection")
-#             else:
-#                 await bot.change_presence(activity=discord.Game("mc.civclassic.com"))
-#         except Exception as e:
-#             print(timestring(), e)
-
-
 @bot.event
 async def on_ready():
     print(timestring(), "connected to discord as", bot.user.name)
     print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
-    await process_discord_queue()
 
 
 @bot.event
@@ -209,6 +219,15 @@ async def on_error(e):
 @bot.event
 async def on_disconnect():
     print(timestring(), "disconnected from discord")
+
+
+@bot.event
+async def on_message(message):
+    if message.content == "player list placeholder message":
+        with open("tablists.txt", "a") as tablistfile:
+            tablistfile.write(str(message.id) + "\n")
+    else:
+        await bot.process_commands(message)
 
 
 @bot.command(pass_context=True)
@@ -232,6 +251,12 @@ async def shutdown(ctx):
     await ctx.channel.send("emergency shutdown invoked")
     connection.disconnect(immediate=True)
     await bot.close()
+
+
+@bot.command(pass_context=True)
+async def maketablist(ctx):
+    """posts a message and periodically updates it with a list of online players"""
+    await ctx.channel.send("player list placeholder message")
 
 
 @bot.command(pass_context=True)
@@ -280,8 +305,8 @@ async def associations(ctx, *args):
 @bot.group(pass_context=True)
 async def roleconfig(ctx):
     """manage role-group configurations"""
-    await ctx.channel.send("roleconfig disabled, \
-    please contact your local information request officer if you believe this is in error")
+    await ctx.channel.send("roleconfig disabled, please contact your local information request officer if you believe this is in error")
+    return
     # if ctx.invoked_subcommand is None:
     #     await ctx.channel.send("invalid subcommand")
 
