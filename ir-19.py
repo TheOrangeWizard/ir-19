@@ -7,6 +7,7 @@ import queue
 import asyncio
 import datetime
 import discord
+from discord import abc
 from discord.ext import commands, tasks
 from threading import Thread
 
@@ -98,27 +99,39 @@ class Loops(commands.Cog):
 
     @tasks.loop(seconds=1)
     async def process_discord_queue(self):
-        package = ds_queue.get()
-        if package["type"] == "CHAT":
-            await self.bot.get_channel(package["channel"]).send(clean(package["message"]))
+        if ds_queue.qsize() > 0:
+            package = ds_queue.get()
+            if package["type"] == "CHAT":
+                await self.bot.get_channel(config.spam_channel).send(clean(package["message"]))
 
     @tasks.loop(seconds=15)
     async def update_tablists(self):
         # print("tablist update loop debug message")
         with open("tablists.txt", "r") as tablistfile:
             for tablist in tablistfile.readlines():
-                tl = tablist.strip()
-                # print("tablist update loop debug message", tl)
-                message = await self.bot.fetch_message(int(tl))
-                await message.edit("player list placeholder content")
+                channel, messageid = tablist.strip().split(" ")
+                try:
+                    message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
+                    if connection.connected:
+                        content = []
+                        # print(connection.player_list.players_by_uuid.keys())
+                        for uuid in connection.player_list.players_by_uuid.keys():
+                            content.append(str(connection.player_list.players_by_uuid[uuid].name))
+                        content = sorted(content, key=str.casefold)
+                        await message.edit(content=clean("\n".join(["**online players**\n"]+content)))
+                    else:
+                        await message.edit(content="connection error")
+                except Exception as e:
+                    print(timestring(), type(e), e)
 
     @tasks.loop(seconds=30)
     async def check_online(self):
         try:
             if not connection.connected:
+                connection.player_list = {}
                 await self.bot.change_presence(activity=None)
                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
-                connection.auth_token.authenticate()
+                connection.auth_token.authenticate(config.username, config.password)
                 await asyncio.sleep(config.reconnect_timer)
                 try:
                     print(timestring(), "connecting...")
@@ -129,6 +142,18 @@ class Loops(commands.Cog):
                 await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
         except Exception as e:
             print(timestring(), e)
+
+    @process_discord_queue.before_loop
+    async def wait(self):
+        await self.bot.wait_until_ready()
+
+    @update_tablists.before_loop
+    async def wait(self):
+        await self.bot.wait_until_ready()
+
+    @check_online.before_loop
+    async def wait(self):
+        await self.bot.wait_until_ready()
 
 
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
@@ -211,9 +236,9 @@ async def on_ready():
     print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
 
 
-@bot.event
-async def on_error(e):
-    print(timestring(), e)
+# @bot.event
+# async def on_error(e):
+#     print(timestring(), e)
 
 
 @bot.event
@@ -225,7 +250,7 @@ async def on_disconnect():
 async def on_message(message):
     if message.content == "player list placeholder message":
         with open("tablists.txt", "a") as tablistfile:
-            tablistfile.write(str(message.id) + "\n")
+            tablistfile.write(str(message.channel.id) + " " + str(message.id) + "\n")
     else:
         await bot.process_commands(message)
 
@@ -397,6 +422,7 @@ def handle_error(exc):
 
 authenticate()
 connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
+connection.__setattr__("player_list", packets.clientbound.play.PlayerListItemPacket.PlayerList())
 
 
 def send_chat(message):
@@ -457,6 +483,13 @@ def on_chat(chat_packet):
     #         nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
 
 
+def on_player_list_item(player_list_item_packet):
+    try:
+        player_list_item_packet.apply(connection.player_list)
+    except Exception as e:
+        print(e)
+
+
 def on_mc_disconnect(disconnect_packet):
     print(timestring(), "logged out from", config.host)
 
@@ -465,6 +498,7 @@ connection.register_packet_listener(on_incoming, packets.Packet, early=True)
 connection.register_packet_listener(on_join_game, packets.clientbound.play.JoinGamePacket)
 connection.register_packet_listener(on_chat, packets.clientbound.play.ChatMessagePacket)
 connection.register_packet_listener(on_mc_disconnect, packets.clientbound.play.DisconnectPacket)
+connection.register_packet_listener(on_player_list_item, packets.clientbound.play.PlayerListItemPacket)
 
 
 if __name__ == "__main__":
