@@ -117,8 +117,8 @@ class Loops(commands.Cog):
                         # print(connection.player_list.players_by_uuid.keys())
                         for uuid in connection.player_list.players_by_uuid.keys():
                             content.append(str(connection.player_list.players_by_uuid[uuid].name))
-                        content = sorted(content, key=str.casefold)
-                        await message.edit(content=clean("\n".join(["**online players**\n"]+content)))
+                        content = clean("\n".join(sorted(content, key=str.casefold)))
+                        await message.edit(content="**online players**\n\n"+content)
                     else:
                         await message.edit(content="connection error")
                 except Exception as e:
