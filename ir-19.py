@@ -7,7 +7,7 @@ import queue
 import asyncio
 import datetime
 import discord
-from discord import abc
+
 from discord.ext import commands, tasks
 from threading import Thread
 
@@ -114,13 +114,14 @@ class Loops(commands.Cog):
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
                     if connection.connected:
                         content = []
-                        # print(connection.player_list.players_by_uuid.keys())
                         for uuid in connection.player_list.players_by_uuid.keys():
                             content.append(str(connection.player_list.players_by_uuid[uuid].name))
                         content = clean("\n".join(sorted(content, key=str.casefold)))
                         await message.edit(content="**online players**\n\n"+content)
                     else:
                         await message.edit(content="connection error")
+                except discord.errors.NotFound:
+                    pass
                 except Exception as e:
                     print(timestring(), type(e), e)
 
@@ -128,7 +129,6 @@ class Loops(commands.Cog):
     async def check_online(self):
         try:
             if not connection.connected:
-                connection.player_list = {}
                 await self.bot.change_presence(activity=None)
                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
                 connection.auth_token.authenticate(config.username, config.password)
@@ -422,7 +422,6 @@ def handle_error(exc):
 
 authenticate()
 connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
-connection.__setattr__("player_list", packets.clientbound.play.PlayerListItemPacket.PlayerList())
 
 
 def send_chat(message):
@@ -468,13 +467,15 @@ def respawn():
 
 def on_join_game(join_game_packet):
     print(timestring(), "connected to", config.host, "as", auth_token.profile.name)
+    connection.__setattr__("player_list", packets.clientbound.play.PlayerListItemPacket.PlayerList())
 
 
 def on_chat(chat_packet):
     source = chat_packet.field_string('position')
     raw_chat = json.loads(str(chat_packet.json_data))
     chat = parse(raw_chat)
-    words = chat.split(" ")
+    if chat[:2] == "§6":
+        parse_snitch(chat)
     print(timestring(), source, chat)
     if config.relay_chat:
         ds_queue.put({"type": "CHAT", "channel": config.spam_channel, "message": chat})
@@ -492,6 +493,16 @@ def on_player_list_item(player_list_item_packet):
 
 def on_mc_disconnect(disconnect_packet):
     print(timestring(), "logged out from", config.host)
+    connection.__setattr__("player_list", packets.clientbound.play.PlayerListItemPacket.PlayerList())
+
+
+def parse_snitch(chat):
+    split_chat = [i.strip() for i in chat.split("")]
+    action = split_chat[1][1:]
+    account = split_chat[2][1:]
+    snitch_name = split_chat[3][1:]
+    distance = split_chat[5][2:][:-1]
+    coords = split_chat[4][2:][:-1].split()
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
