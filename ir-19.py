@@ -13,7 +13,7 @@ from threading import Thread
 
 from minecraft import authentication
 from minecraft.exceptions import YggdrasilError
-from minecraft.networking.connection import Connection
+from minecraft.networking.connection import Connection, PlayingReactor
 from minecraft.networking import packets
 
 ########
@@ -112,7 +112,7 @@ class Loops(commands.Cog):
                 channel, messageid = tablist.strip().split(" ")
                 try:
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
-                    if connection.connected:
+                    if type(connection.reactor) == PlayingReactor:
                         content = []
                         for uuid in connection.player_list.players_by_uuid.keys():
                             content.append(str(connection.player_list.players_by_uuid[uuid].name))
@@ -128,7 +128,7 @@ class Loops(commands.Cog):
     @tasks.loop(seconds=30)
     async def check_online(self):
         try:
-            if not connection.connected:
+            if not type(connection.reactor) == PlayingReactor:
                 await self.bot.change_presence(activity=None)
                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
                 connection.auth_token.authenticate(config.username, config.password)
@@ -288,7 +288,7 @@ async def maketablist(ctx):
 @commands.has_permissions(manage_messages=True)
 async def associate(ctx, *args):
     """associates the second given account with the first"""
-    if len (args) > 1:
+    if len(args) > 1:
         arg1 = args[0]
         if arg1 == "me":
             for arg in args[1:]:
@@ -312,7 +312,7 @@ async def associate(ctx, *args):
 @bot.command(pass_context=True)
 async def associations(ctx, *args):
     """get the current account associations for a given minecraft username or discord id"""
-    if len (args) > 0:
+    if len(args) > 0:
         for arg in args:
             try:
                 assc = get_associations(arg)
@@ -378,18 +378,19 @@ async def add(ctx, *args):
 @commands.has_permissions(manage_messages=True)
 async def update(ctx, *args):
     """updates"""
-    queue = []
-    with open ("data/roleconfig.txt", "r") as rc:
-        for line in rc.readlines():
-            try:
-                g = line.strip("\n").split(" ")[1]
-                if not g.lower() in queue:
-                    queue.append(g.lower())
-            except:
-                pass
-    nllm["queue"] = queue
-    await ctx.channel.send("updating roleconfig for " + ", ".join(queue))
-    send_chat("/nllm " + queue.pop())
+    await ctx.channel.send("roleconfig disabled, please contact your local information request officer if you believe this is in error")
+    # queue = []
+    # with open ("data/roleconfig.txt", "r") as rc:
+    #     for line in rc.readlines():
+    #         try:
+    #             g = line.strip("\n").split(" ")[1]
+    #             if not g.lower() in queue:
+    #                 queue.append(g.lower())
+    #         except:
+    #             pass
+    # nllm["queue"] = queue
+    # await ctx.channel.send("updating roleconfig for " + ", ".join(queue))
+    # send_chat("/nllm " + queue.pop())
 
 
 #############
