@@ -577,7 +577,7 @@ def on_mc_disconnect(disconnect_packet):
 
 
 def parse_snitch(chat):
-    split_chat = [i.strip() for i in chat.split("")]
+    split_chat = [i.strip() for i in chat.split(" ")]
     action = split_chat[1][1:]
     account = split_chat[2][1:]
     snitch_name = split_chat[3][1:]
