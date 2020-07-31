@@ -357,7 +357,7 @@ async def set_id(ctx, *args):
         else:
             try:
                 assert bot.get_user(int(did))
-                n = add_association(did, acct)
+                n = set_discord_id(did, acct)
                 await ctx.channel.send(n)
             except:
                 await ctx.channel.send("invalid discord id")
