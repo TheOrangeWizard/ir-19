@@ -171,7 +171,9 @@ class Loops(commands.Cog):
                     if not connection.connected:
                         content = []
                         for uuid in connection.player_list.players_by_uuid.keys():
-                            content.append(str(connection.player_list.players_by_uuid[uuid].name))
+                            name = str(connection.player_list.players_by_uuid[uuid].name)
+                            content.append(name)
+                            record_account(name)
                         content = clean("\n".join(sorted(content, key=str.casefold)))
                         await message.edit(content="**online players**\n\n"+content)
                     else:
