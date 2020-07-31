@@ -4,6 +4,7 @@ import sys
 import time
 import json
 import queue
+import shelve
 import asyncio
 import datetime
 import discord
@@ -23,6 +24,7 @@ from minecraft.networking import packets
 
 buffer = 100
 ds_queue = queue.Queue(buffer)
+account_cache = []
 
 
 def timestring():
@@ -35,32 +37,86 @@ def datestring():
     return "[{:%d/%m/%y}]".format(mtime)
 
 
+def record_account(acct):
+    if acct in account_cache:
+        return
+    with shelve.open("data/accounts.shelf") as accountshelf:
+        if acct in accountshelf.keys():
+            account_cache.append(acct)
+        else:
+            accountshelf[acct] = {"discord id":None, "activity":[]}
+
+
+def set_discord_id(acct, did, force=False):
+    with shelve.open("data/accounts.shelf") as accountshelf:
+        if acct.lower() not in accountshelf.keys():
+            return "account not found"
+        elif accountshelf[acct.lower()]["discord id"] == did:
+            return "account already has discord id set"
+        elif accountshelf[acct.lower()]["discord id"] is not None:
+            return "account already has different discord id set"
+        else:
+            accountshelf[acct.lower()]["discord id"] = did
+    with shelve.open("data/associations.shelf") as associationshelf:
+        if did in associationshelf.keys():
+            accts = associationshelf[did]["accounts"]
+            accts.append(acct.lower())
+            associationshelf[did]["accounts"] = accts
+
+
 def add_association(acct1, acct2):
-    with open("data/accounts.txt", "r") as accts:
-        lines = accts.readlines()
-    e = False
-    for line in lines:
-        if acct1.lower() in line:
-            e = True
-            if acct2.lower() in line:
-                return False
-            else:
-                lines[lines.index(line)] = line.strip("\n") + " " + acct2.lower() + "\n"
-    if not e:
-        lines.append(acct1.lower() + " " + acct2.lower() + "\n")
-    with open("data/accounts.txt", "w") as accts:
-        for line in lines:
-            accts.write(line.lower())
-    return True
+    with shelve.open("data/accounts.shelf") as accountshelf:
+        accountkeys = accountshelf.keys()
+        acct1id, acct2id = None, None
+        if acct1.lower() in accountkeys:
+            acct1id = accountshelf[acct1.lower()]["discord id"]
+        if acct2.lower() in accountkeys:
+            acct2id = accountshelf[acct2.lower()]["discord id"]
+        if acct1id is not None and acct2id is None:
+            with shelve.open("data/associations.shelf") as associationshelf:
+                acct1idalts = associationshelf[acct1id]["accounts"]
+                acct1idalts.append(acct2.lower())
+                associationshelf[acct1id]["accounts"] = acct1idalts
+                accountshelf[acct2.lower()]["discord id"] = acct1id
+            return "associated " + acct2.lower() + " with " + acct1.lower()
+        elif acct1id is None and acct2id is not None:
+            with shelve.open("data/associations.shelf") as associationshelf:
+                acct2idalts = associationshelf[acct2id]["accounts"]
+                acct2idalts.append(acct1.lower())
+                associationshelf[acct2id]["accounts"] = acct2idalts
+                accountshelf[acct1.lower()]["discord id"] = acct2id
+            return "associated " + acct1.lower() + " with " + acct2.lower()
+        elif acct1id is not None and acct2id is not None:
+            return "cannot associate: both accounts have existing discord id"
+        else:
+            return "cannot associate: neither account has existing discord id"
 
 
 def get_associations(acct):
-    with open("data/accounts.txt", "r") as accts:
-        lines = accts.readlines()
-    for line in lines:
-        if str(acct).lower() in line:
-            return line.strip("\n").split(" ")
-    return []
+    with shelve.open("data/accounts.shelf") as accountshelf:
+        accounts = accountshelf.keys()
+        if acct.lower() in accounts:
+            acctid = accountshelf[acct.lower()]["discord id"]
+    if acctid is not None:
+        with shelve.open("data/associations.shelf") as associationshelf:
+            return associationshelf[acctid]["accounts"]
+    else:
+        return []
+
+
+def get_discord_id(acct):
+    with shelve.open("data/accounts.shelf") as accountshelf:
+        accounts = accountshelf.keys()
+        if acct.lower() in accounts:
+            return accountshelf[acct.lower()]["discord id"]
+
+
+def get_accounts(did):
+    with shelve.open("data/associations.shelf") as associationshelf:
+        if did in associationshelf.keys():
+            return associationshelf[did]["accounts"]
+        else:
+            return []
 
 
 def parse(obj):
@@ -112,7 +168,7 @@ class Loops(commands.Cog):
                 channel, messageid = tablist.strip().split(" ")
                 try:
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
-                    if type(connection.reactor) == PlayingReactor:
+                    if not connection.connected:
                         content = []
                         for uuid in connection.player_list.players_by_uuid.keys():
                             content.append(str(connection.player_list.players_by_uuid[uuid].name))
@@ -128,7 +184,7 @@ class Loops(commands.Cog):
     @tasks.loop(seconds=30)
     async def check_online(self):
         try:
-            if not type(connection.reactor) == PlayingReactor:
+            if not connection.connected:
                 await self.bot.change_presence(activity=None)
                 print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
                 connection.auth_token.authenticate(config.username, config.password)
@@ -162,67 +218,68 @@ bot.add_cog(Loops(bot))
 
 
 async def roleconfig_update():
-    batch = []
-    for group in nllm["data"].keys():
-        print(timestring(), "updating group permissions for", group)
-
-        roleconfigs = {}
-        with open("data/roleconfig.txt") as rc:
-            for line in rc.readlines():
-                try:
-                    i = line.lower().strip("\n").split(" ")
-                    try:
-                        roleconfigs[int(i[0])][i[1]] = i[2]
-                    except KeyError:
-                        roleconfigs[int(i[0])] = {i[1]: i[2]}
-                except:
-                    pass
-        # print(roleconfigs)
-
-        groupconfigs = {}
-        for member in bot.get_guild(config.guild).members:
-            hrank = 0
-            for role in member.roles:
-                for a in get_associations(member.id):
-                    account = a.lower()
-                    if not len(account) > 16:
-                        try:
-                            if account in groupconfigs.keys():
-                                if group in groupconfigs[account].keys():
-                                    rank = nl_ranks.index(roleconfigs[role.id][group])
-                                    if rank > hrank:
-                                        groupconfigs[account][group] = roleconfigs[role.id][group]
-                                    else:
-                                        pass
-                                else:
-                                    groupconfigs[account][group] = roleconfigs[role.id][group]
-                            else:
-                                groupconfigs[account] = {group: roleconfigs[role.id][group]}
-                        except:
-                            pass
-        # print(groupconfigs)
-
-        for a in groupconfigs.keys():
-            account = a.lower()
-            if not len(account) > 16:
-                try:
-                    cfg = groupconfigs[account][group].lower()
-                    try:
-                        nlg = nllm["data"][group][account]
-                        if not cfg == nlg:
-                            batch.append("/nlpp " + group + " " + account + " " + groupconfigs[account][group])
-                    except:
-                        batch.append("/nlip " + group + " " + account + " " + groupconfigs[account][group])
-                except KeyError:
-                    pass
-
-        for account in nllm["data"][group].keys():
-            try:
-                assert groupconfigs[account][group]
-            except KeyError:
-                batch.append("/nlrm " + group + " " + account)
-    global chat_batch
-    chat_batch += batch
+    return
+    # batch = []
+    # for group in nllm["data"].keys():
+    #     print(timestring(), "updating group permissions for", group)
+    #
+    #     roleconfigs = {}
+    #     with open("data/roleconfig.txt") as rc:
+    #         for line in rc.readlines():
+    #             try:
+    #                 i = line.lower().strip("\n").split(" ")
+    #                 try:
+    #                     roleconfigs[int(i[0])][i[1]] = i[2]
+    #                 except KeyError:
+    #                     roleconfigs[int(i[0])] = {i[1]: i[2]}
+    #             except:
+    #                 pass
+    #     # print(roleconfigs)
+    #
+    #     groupconfigs = {}
+    #     for member in bot.get_guild(config.guild).members:
+    #         hrank = 0
+    #         for role in member.roles:
+    #             for a in get_associations(member.id):
+    #                 account = a.lower()
+    #                 if not len(account) > 16:
+    #                     try:
+    #                         if account in groupconfigs.keys():
+    #                             if group in groupconfigs[account].keys():
+    #                                 rank = nl_ranks.index(roleconfigs[role.id][group])
+    #                                 if rank > hrank:
+    #                                     groupconfigs[account][group] = roleconfigs[role.id][group]
+    #                                 else:
+    #                                     pass
+    #                             else:
+    #                                 groupconfigs[account][group] = roleconfigs[role.id][group]
+    #                         else:
+    #                             groupconfigs[account] = {group: roleconfigs[role.id][group]}
+    #                     except:
+    #                         pass
+    #     # print(groupconfigs)
+    #
+    #     for a in groupconfigs.keys():
+    #         account = a.lower()
+    #         if not len(account) > 16:
+    #             try:
+    #                 cfg = groupconfigs[account][group].lower()
+    #                 try:
+    #                     nlg = nllm["data"][group][account]
+    #                     if not cfg == nlg:
+    #                         batch.append("/nlpp " + group + " " + account + " " + groupconfigs[account][group])
+    #                 except:
+    #                     batch.append("/nlip " + group + " " + account + " " + groupconfigs[account][group])
+    #             except KeyError:
+    #                 pass
+    #
+    #     for account in nllm["data"][group].keys():
+    #         try:
+    #             assert groupconfigs[account][group]
+    #         except KeyError:
+    #             batch.append("/nlrm " + group + " " + account)
+    # global chat_batch
+    # chat_batch += batch
     # m = "the following commands will be queued for execution:"
     # for i in batch:
     #     m += "\n" + i
@@ -286,45 +343,62 @@ async def maketablist(ctx):
 
 @bot.command(pass_context=True)
 @commands.has_permissions(manage_messages=True)
-async def associate(ctx, *args):
-    """associates the second given account with the first"""
-    if len(args) > 1:
-        arg1 = args[0]
-        if arg1 == "me":
-            for arg in args[1:]:
-                me = bot.get_user(int(ctx.message.author.id)).name + "#" + bot.get_user(int(ctx.message.author.id)).discriminator
-                if add_association(str(ctx.message.author.id), arg):
-                    await ctx.channel.send(me + " associcated with " + arg)
-                else:
-                    await ctx.channel.send(me + " already associcated with " + arg)
+async def set_id(ctx, *args):
+    """`set_id <discord id> <account name>` sets a discord id for a given minecraft account"""
+    if len(args) == 2:
+        did, acct = args[0], args[1]
+        if did == "me":
+            did = str(ctx.message.author.id)
         else:
-            for arg in args[1:]:
-                try:
-                    n = bot.get_user(int(arg1)).name + "#" + bot.get_user(int(arg1)).discriminator
-                except:
-                    n = arg1
-                if add_association(str(arg1), arg):
-                    await ctx.channel.send(n + " associcated with " + arg)
-                else:
-                    await ctx.channel.send(n + " already associcated with " + arg)
+            try:
+                assert bot.get_user(int(did))
+                n = add_association(did, acct)
+                await ctx.channel.send(n)
+            except:
+                await ctx.channel.send("invalid discord id")
+    else:
+        await ctx.channel.send("usage: `set_id <discord id> <account name>`")
+
+
+
+@bot.command(pass_context=True)
+@commands.has_permissions(manage_messages=True)
+async def associate(ctx, *args):
+    """associates two given minecraft accounts"""
+    if len(args) == 2:
+        n = associate(args[0], args[1])
+    else:
+        await ctx.channel.send("usage: `associate <account 1> <account 2>`")
 
 
 @bot.command(pass_context=True)
 async def associations(ctx, *args):
-    """get the current account associations for a given minecraft username or discord id"""
+    """get the current account associations for a given minecraft account"""
     if len(args) > 0:
         for arg in args:
             try:
                 assc = get_associations(arg)
                 message = ""
                 for a in assc:
-                    try:
-                        message += bot.get_user(int(a)).name + "#" + bot.get_user(int(a)).discriminator + ", "
-                    except:
-                        message += a + ", "
+                    message += a + ", "
                 await ctx.channel.send(message[:-2])
             except:
                 await ctx.channel.send("no associations found")
+    else:
+        await ctx.channel.send("usage: `associations <account name>`")
+
+
+@bot.command(pass_context=True)
+async def accounts(ctx, *, arg):
+    """get the current account associations for a given discord id"""
+    try:
+        assc = get_accounts(arg)
+        message = ""
+        for a in assc:
+            message += a + ", "
+        await ctx.channel.send(message[:-2])
+    except:
+        await ctx.channel.send("no associations found")
 
 
 @bot.group(pass_context=True)
@@ -514,6 +588,12 @@ connection.register_packet_listener(on_player_list_item, packets.clientbound.pla
 
 
 if __name__ == "__main__":
+    print(timestring(), "starting up")
+    a = time.time()
+    with shelve.open("data/accounts.shelf") as accountshelf:
+        for acct in accountshelf.keys():
+            account_cache.append(acct)
+    print(timestring(), "account cache populated in", time.time()-a, "seconds")
     connection.connect()
     discordThread = Thread(target=bot.run, args=[config.token])
     discordThread.run()
