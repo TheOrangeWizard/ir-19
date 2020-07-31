@@ -163,18 +163,21 @@ class Loops(commands.Cog):
     @tasks.loop(seconds=15)
     async def update_tablists(self):
         # print("tablist update loop debug message")
+        content = []
+        for uuid in connection.player_list.players_by_uuid.keys():
+            name = str(connection.player_list.players_by_uuid[uuid].name)
+            content.append(name)
+            try:
+                record_account(name)
+            except Exception as e:
+                print(e)
+        content = clean("\n".join(sorted(content, key=str.casefold)))
         with open("tablists.txt", "r") as tablistfile:
             for tablist in tablistfile.readlines():
                 channel, messageid = tablist.strip().split(" ")
                 try:
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
-                    if not connection.connected:
-                        content = []
-                        for uuid in connection.player_list.players_by_uuid.keys():
-                            name = str(connection.player_list.players_by_uuid[uuid].name)
-                            content.append(name)
-                            record_account(name)
-                        content = clean("\n".join(sorted(content, key=str.casefold)))
+                    if connection.connected:
                         await message.edit(content="**online players**\n\n"+content)
                     else:
                         await message.edit(content="connection error")
