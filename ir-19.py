@@ -38,17 +38,17 @@ def datestring():
 
 
 def record_account(acct):
-    if acct in account_cache:
-        return
-    with shelve.open("data/accounts.shelf") as accountshelf:
-        if acct in accountshelf.keys():
-            account_cache.append(acct)
-        else:
-            accountshelf[acct] = {"discord id":None, "activity":[]}
+    if acct.lower() not in account_cache:
+        with shelve.open("data/accounts.shelf") as accountshelf:
+            if acct.lower() in accountshelf.keys():
+                account_cache.append(acct.lower())
+            else:
+                accountshelf[acct.lower()] = {"discord id": None, "activity": []}
 
 
-def set_discord_id(acct, did, force=False):
+def set_discord_id(acct, did):
     with shelve.open("data/accounts.shelf") as accountshelf:
+        # print([k for k in accountshelf.keys()])
         if acct.lower() not in accountshelf.keys():
             return "account not found"
         elif accountshelf[acct.lower()]["discord id"] == did:
@@ -56,12 +56,19 @@ def set_discord_id(acct, did, force=False):
         elif accountshelf[acct.lower()]["discord id"] is not None:
             return "account already has different discord id set"
         else:
-            accountshelf[acct.lower()]["discord id"] = did
+            acctdata = accountshelf[acct.lower()]
+            acctdata["discord id"] = did
+            accountshelf[acct.lower()] = acctdata
+            n = "id for " + acct.lower() + " set to " + did
     with shelve.open("data/associations.shelf") as associationshelf:
         if did in associationshelf.keys():
-            accts = associationshelf[did]["accounts"]
-            accts.append(acct.lower())
-            associationshelf[did]["accounts"] = accts
+            acctdata = associationshelf[did]
+            acctdata["accounts"].append(acct.lower())
+            associationshelf[did] = acctdata
+            return n + " and account added to list"
+        else:
+            associationshelf[did] = {"accounts": [acct.lower()]}
+            return n + " and id entry created"
 
 
 def add_association(acct1, acct2):
@@ -74,17 +81,21 @@ def add_association(acct1, acct2):
             acct2id = accountshelf[acct2.lower()]["discord id"]
         if acct1id is not None and acct2id is None:
             with shelve.open("data/associations.shelf") as associationshelf:
-                acct1idalts = associationshelf[acct1id]["accounts"]
-                acct1idalts.append(acct2.lower())
-                associationshelf[acct1id]["accounts"] = acct1idalts
-                accountshelf[acct2.lower()]["discord id"] = acct1id
+                acct1iddata = associationshelf[acct1id]
+                acct1iddata["accounts"].append(acct2.lower())
+                associationshelf[acct1id] = acct1iddata
+                acct2data = accountshelf[acct2.lower()]
+                acct2data["discord id"] = acct1id
+                accountshelf[acct2.lower()] = acct2data
             return "associated " + acct2.lower() + " with " + acct1.lower()
         elif acct1id is None and acct2id is not None:
             with shelve.open("data/associations.shelf") as associationshelf:
-                acct2idalts = associationshelf[acct2id]["accounts"]
-                acct2idalts.append(acct1.lower())
-                associationshelf[acct2id]["accounts"] = acct2idalts
-                accountshelf[acct1.lower()]["discord id"] = acct2id
+                acct2iddata = associationshelf[acct2id]
+                acct2iddata["accounts"].append(acct1.lower())
+                associationshelf[acct2id] = acct2iddata
+                acct1data = accountshelf[acct1.lower()]
+                acct1data["discord id"] = acct2id
+                accountshelf[acct1.lower()] = acct1data
             return "associated " + acct1.lower() + " with " + acct2.lower()
         elif acct1id is not None and acct2id is not None:
             return "cannot associate: both accounts have existing discord id"
@@ -117,6 +128,15 @@ def get_accounts(did):
             return associationshelf[did]["accounts"]
         else:
             return []
+
+
+def record_spam():
+    with shelve.open("data/accounts.shelf") as accountshelf:
+        for acct in accountshelf.keys():
+            print(acct, accountshelf[acct])
+    with shelve.open("data/associations.shelf") as associationshelf:
+        for acct in associationshelf.keys():
+            print(acct, associationshelf[acct])
 
 
 def parse(obj):
@@ -324,6 +344,12 @@ async def test(ctx):
 
 
 @bot.command(pass_context=True)
+async def test2(ctx):
+    """test"""
+    record_spam()
+
+
+@bot.command(pass_context=True)
 @commands.has_permissions(administrator=True)
 async def send(ctx, *, arg):
     """send ingame chat"""
@@ -349,21 +375,30 @@ async def maketablist(ctx):
 @bot.command(pass_context=True)
 @commands.has_permissions(manage_messages=True)
 async def set_id(ctx, *args):
-    """`set_id <discord id> <account name>` sets a discord id for a given minecraft account"""
+    """set_id <account name> <discord id> sets a discord id for a given minecraft account"""
     if len(args) == 2:
-        did, acct = args[0], args[1]
+        did, acct = args[1], args[0]
         if did == "me":
             did = str(ctx.message.author.id)
-        else:
-            try:
-                assert bot.get_user(int(did))
-                n = set_discord_id(did, acct)
-                await ctx.channel.send(n)
-            except:
-                await ctx.channel.send("invalid discord id")
+        try:
+            assert bot.get_user(int(did))
+            n = set_discord_id(acct, did)
+            await ctx.channel.send(n)
+        except Exception as e:
+            await ctx.channel.send(e)
     else:
         await ctx.channel.send("usage: `set_id <discord id> <account name>`")
 
+
+@bot.command(pass_context=True)
+@commands.has_permissions(manage_messages=True)
+async def get_id(ctx, *, arg):
+    """gets the discord id for a given minecraft account"""
+    try:
+        n = get_discord_id(arg)
+        await ctx.channel.send(n)
+    except Exception as e:
+        await ctx.channel.send(e)
 
 
 @bot.command(pass_context=True)
@@ -371,7 +406,8 @@ async def set_id(ctx, *args):
 async def associate(ctx, *args):
     """associates two given minecraft accounts"""
     if len(args) == 2:
-        n = associate(args[0], args[1])
+        n = add_association(args[0], args[1])
+        await ctx.channel.send(n)
     else:
         await ctx.channel.send("usage: `associate <account 1> <account 2>`")
 
@@ -594,6 +630,7 @@ connection.register_packet_listener(on_player_list_item, packets.clientbound.pla
 
 if __name__ == "__main__":
     print(timestring(), "starting up")
+    # record_spam()
     a = time.time()
     with shelve.open("data/accounts.shelf") as accountshelf:
         for acct in accountshelf.keys():
