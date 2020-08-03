@@ -191,6 +191,7 @@ class Loops(commands.Cog):
                 record_account(name)
             except Exception as e:
                 print(e)
+        n = str(len(content))
         content = clean("\n".join(sorted(content, key=str.casefold)))
         with open("tablists.txt", "r") as tablistfile:
             for tablist in tablistfile.readlines():
@@ -198,7 +199,7 @@ class Loops(commands.Cog):
                 try:
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
                     if connection.connected:
-                        await message.edit(content="**online players**\n\n"+content)
+                        await message.edit(content="**" + n + " players:**\n"+content)
                     else:
                         await message.edit(content="connection error")
                 except discord.errors.NotFound:
