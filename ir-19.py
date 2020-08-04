@@ -169,9 +169,6 @@ def clean(text):
 class Loops(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.process_discord_queue.start()
-        self.update_tablists.start()
-        self.check_online.start()
 
     @tasks.loop(seconds=1)
     async def process_discord_queue(self):
@@ -317,6 +314,19 @@ async def roleconfig_update():
 async def on_ready():
     print(timestring(), "connected to discord as", bot.user.name)
     print(timestring(), "spam channel registered as", bot.get_channel(config.spam_channel).name)
+    loops = bot.get_cog("Loops")
+    if loops is not None:
+        try:
+            loops.process_discord_queue.start()
+        except: pass
+        try:
+            loops.update_tablists.start()
+        except: pass
+        try:
+            loops.check_online.start()
+        except: pass
+    else:
+        print(timestring(), "this shouldn't happen")
 
 
 # @bot.event
@@ -507,6 +517,13 @@ async def update(ctx, *args):
     # nllm["queue"] = queue
     # await ctx.channel.send("updating roleconfig for " + ", ".join(queue))
     # send_chat("/nllm " + queue.pop())
+
+
+@bot.group(pass_context=True)
+async def debug(ctx):
+    """debug stuff"""
+    if ctx.invoked_subcommand is None:
+        await ctx.channel.send("invalid subcommand")
 
 
 #############
