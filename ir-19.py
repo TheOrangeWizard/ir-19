@@ -225,7 +225,7 @@ class Loops(commands.Cog):
     @tasks.loop(hours=2)
     async def update_roleconfig(self):
         try:
-            await roleconfig_update(execute=True)
+            await roleconfig_update_starter()
         except Exception as e:
             print(timestring(), e)
 
@@ -251,7 +251,22 @@ bot = commands.Bot(command_prefix=config.prefix, description=config.motd)
 bot.add_cog(Loops(bot))
 
 
-async def roleconfig_update(execute=False):
+async def roleconfig_update_starter():
+    queue = []
+    with open("data/roleconfig.txt", "r") as rc:
+        for line in rc.readlines():
+            try:
+                g = line.strip("\n").split(" ")[1]
+                if not g.lower() in queue:
+                    queue.append(g.lower())
+            except:
+                pass
+    nllm["queue"] = queue
+    await bot.get_channel(config.spam_channel).send("updating roleconfig for " + ", ".join(queue))
+    send_chat("/nllm " + queue.pop())
+
+
+async def roleconfig_update():
     batch = []
     for group in nllm["data"].keys():
         print(timestring(), "updating group permissions for", group)
@@ -311,15 +326,13 @@ async def roleconfig_update(execute=False):
                 assert groupconfigs[account][group]
             except KeyError:
                 batch.append("/nlrm " + group + " " + account)
-    if execute:
-        global chat_batch
-        chat_batch += batch
-    else:
-        m = "the following commands will be queued for execution:"
-        for i in batch:
-            m += "\n" + i
-        print(m)
-        await bot.get_channel(config.spam_channel).send(clean(m))
+    global chat_batch
+    chat_batch += batch
+    # m = "the following commands will be queued for execution:"
+    # for i in batch:
+    #     m += "\n" + i
+    # print(m)
+    # await bot.get_channel(config.spam_channel).send(clean(m))
 
 
 @bot.event
@@ -514,18 +527,7 @@ async def add(ctx, *args):
 @commands.has_permissions(manage_messages=True)
 async def update(ctx, *args):
     """updates"""
-    queue = []
-    with open ("data/roleconfig.txt", "r") as rc:
-        for line in rc.readlines():
-            try:
-                g = line.strip("\n").split(" ")[1]
-                if not g.lower() in queue:
-                    queue.append(g.lower())
-            except:
-                pass
-    nllm["queue"] = queue
-    await ctx.channel.send("updating roleconfig for " + ", ".join(queue))
-    send_chat("/nllm " + queue.pop())
+    await roleconfig_update_starter()
 
 
 @bot.group(pass_context=True)
@@ -617,14 +619,15 @@ def on_chat(chat_packet):
     source = chat_packet.field_string('position')
     raw_chat = json.loads(str(chat_packet.json_data))
     chat = parse(raw_chat)
+    words = chat.split(" ")
     if chat[:2] == "§6":
         parse_snitch(chat)
     print(timestring(), source, chat)
     if config.relay_chat:
         ds_queue.put({"type": "CHAT", "channel": config.spam_channel, "message": chat})
-    # if not nllm["group"] == "":
-    #     if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
-    #         nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
+    if not nllm["group"] == "":
+        if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
+            nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
 
 
 def on_player_list_item(player_list_item_packet):
