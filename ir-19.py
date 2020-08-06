@@ -288,7 +288,7 @@ async def roleconfig_update():
         for member in bot.get_guild(config.guild).members:
             hrank = 0
             for role in member.roles:
-                for a in get_associations(member.id):
+                for a in get_accounts(member.id):
                     account = a.lower()
                     if not len(account) > 16:
                         try:
