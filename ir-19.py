@@ -14,7 +14,7 @@ from threading import Thread
 
 from minecraft import authentication
 from minecraft.exceptions import YggdrasilError
-from minecraft.networking.connection import Connection, PlayingReactor
+from minecraft.networking.connection import Connection
 from minecraft.networking import packets
 
 ########
@@ -177,7 +177,7 @@ class Loops(commands.Cog):
             if package["type"] == "CHAT":
                 await self.bot.get_channel(config.spam_channel).send(clean(package["message"]))
 
-    @tasks.loop(seconds=15)
+    @tasks.loop(seconds=config.tablist_update_delay)
     async def update_tablists(self):
         # print("tablist update loop debug message")
         content = []
@@ -328,11 +328,11 @@ async def roleconfig_update():
                 batch.append("/nlrm " + group + " " + account)
     global chat_batch
     chat_batch += batch
-    # m = "the following commands will be queued for execution:"
-    # for i in batch:
-    #     m += "\n" + i
-    # print(m)
-    # await bot.get_channel(config.spam_channel).send(clean(m))
+    m = "the following commands have been queued for execution:"
+    for i in batch:
+        m += "\n" + i
+    print(m)
+    await bot.get_channel(config.spam_channel).send(clean(m))
 
 
 @bot.event
