@@ -620,14 +620,15 @@ def on_chat(chat_packet):
     raw_chat = json.loads(str(chat_packet.json_data))
     chat = parse(raw_chat)
     words = chat.split(" ")
-    if chat[:2] == "§6":
-        parse_snitch(chat)
-    print(timestring(), source, chat)
-    if config.relay_chat:
-        ds_queue.put({"type": "CHAT", "channel": config.spam_channel, "message": chat})
-    if not nllm["group"] == "":
-        if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
-            nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
+    if not source == "GAME_INFO":
+        print(timestring(), source, chat)
+        if chat[:2] == "§6":
+            parse_snitch(chat)
+        if config.relay_chat:
+            ds_queue.put({"type": "CHAT", "channel": config.spam_channel, "message": chat})
+        if not nllm["group"] == "":
+            if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
+                nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
 
 
 def on_player_list_item(player_list_item_packet):
