@@ -343,13 +343,16 @@ async def on_ready():
     if loops is not None:
         try:
             loops.process_discord_queue.start()
-        except: pass
+        except Exception as e:
+            print(e)
         try:
             loops.update_tablists.start()
-        except: pass
+        except Exception as e:
+            print(e)
         try:
             loops.check_online.start()
-        except: pass
+        except Exception as e:
+            print(e)
     else:
         print(timestring(), "this shouldn't happen")
 
