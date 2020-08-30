@@ -234,18 +234,22 @@ class Loops(commands.Cog):
     @process_discord_queue.before_loop
     async def before_process_discord_queue(self):
         await self.bot.wait_until_ready()
+        print(timestring(), "process discord queue loop has started")
 
     @update_tablists.before_loop
     async def before_update_tablists(self):
         await self.bot.wait_until_ready()
+        print(timestring(), "tablist update loop has started")
 
     @check_online.before_loop
     async def before_check_online(self):
         await self.bot.wait_until_ready()
+        print(timestring(), "check online loop has started")
 
     @update_roleconfig.before_loop
     async def before_update_roleconfig(self):
         await self.bot.wait_until_ready()
+        print(timestring(), "roleconfig update loop has started")
 
     # after loops
 
