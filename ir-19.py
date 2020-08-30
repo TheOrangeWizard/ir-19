@@ -229,21 +229,41 @@ class Loops(commands.Cog):
         except Exception as e:
             print(timestring(), e)
 
+    # before loops
+
     @process_discord_queue.before_loop
-    async def wait(self):
+    async def before_process_discord_queue(self):
         await self.bot.wait_until_ready()
 
     @update_tablists.before_loop
-    async def wait(self):
+    async def before_update_tablists(self):
         await self.bot.wait_until_ready()
 
     @check_online.before_loop
-    async def wait(self):
+    async def before_check_online(self):
         await self.bot.wait_until_ready()
 
     @update_roleconfig.before_loop
-    async def wait(self):
+    async def before_update_roleconfig(self):
         await self.bot.wait_until_ready()
+
+    # after loops
+
+    @process_discord_queue.after_loop
+    async def process_discord_queue_finish(self):
+        print("process discord queue loop has ended")
+
+    @update_tablists.after_loop
+    async def update_tablists_finish(self):
+        print("tablist update loop has ended")
+
+    @check_online.after_loop
+    async def check_online_finish(self):
+        print("check online loop has ended")
+
+    @update_roleconfig.after_loop
+    async def update_roleconfig_finish(self):
+        print("roleconfig update loop has ended")
 
 
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
