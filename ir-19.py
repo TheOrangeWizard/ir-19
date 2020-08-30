@@ -187,7 +187,7 @@ class Loops(commands.Cog):
             try:
                 record_account(name)
             except Exception as e:
-                print(e)
+                print(timestring(), type(e), e)
         n = str(len(content))
         content = clean("\n".join(sorted(content, key=str.casefold)))
         with open("tablists.txt", "r") as tablistfile:
@@ -251,19 +251,23 @@ class Loops(commands.Cog):
 
     @process_discord_queue.after_loop
     async def process_discord_queue_finish(self):
-        print("process discord queue loop has ended")
+        print(timestring(), "process discord queue loop has ended")
+        self.process_discord_queue.restart()
 
     @update_tablists.after_loop
     async def update_tablists_finish(self):
-        print("tablist update loop has ended")
+        print(timestring(), "tablist update loop has ended")
+        self.update_tablists.restart()
 
     @check_online.after_loop
     async def check_online_finish(self):
-        print("check online loop has ended")
+        print(timestring(), "check online loop has ended")
+        self.check_online.restart()
 
     @update_roleconfig.after_loop
     async def update_roleconfig_finish(self):
-        print("roleconfig update loop has ended")
+        print(timestring(), "roleconfig update loop has ended")
+        self.update_roleconfig.restart()
 
 
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
