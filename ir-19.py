@@ -681,6 +681,7 @@ def parse_snitch(chat):
     snitch_name = split_chat[3][1:]
     distance = split_chat[5][2:][:-1]
     coords = split_chat[4][2:][:-1].split()
+    print(account, action, "at", snitch_name, coords)
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
