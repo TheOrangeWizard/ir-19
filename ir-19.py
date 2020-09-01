@@ -676,12 +676,12 @@ def on_mc_disconnect(disconnect_packet):
 
 def parse_snitch(chat):
     split_chat = [i.strip() for i in chat.split("  ")]
-    action = split_chat[1][1:]
-    account = split_chat[2][1:]
-    snitch_name = split_chat[3][1:]
+    action = split_chat[1][2:]
+    account = split_chat[2][2:]
+    snitch_name = split_chat[3][2:]
     distance = split_chat[4].split(" ")[0][2:][:-1]
     direction = split_chat[4].split(" ")[1][1:][:-2]
-    coords = split_chat[3][2:][:-1].split(" ")
+    coords = split_chat[3][3:][:-1].split(" ")
     print(account, action, "at", snitch_name, coords)
 
 
