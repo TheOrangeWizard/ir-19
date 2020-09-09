@@ -256,22 +256,22 @@ class Loops(commands.Cog):
     @process_discord_queue.after_loop
     async def process_discord_queue_finish(self):
         print(timestring(), "process discord queue loop has ended")
-        self.process_discord_queue.restart()
+        self.process_discord_queue.start()
 
     @update_tablists.after_loop
     async def update_tablists_finish(self):
         print(timestring(), "tablist update loop has ended")
-        self.update_tablists.restart()
+        self.update_tablists.start()
 
     @check_online.after_loop
     async def check_online_finish(self):
         print(timestring(), "check online loop has ended")
-        self.check_online.restart()
+        self.check_online.start()
 
     @update_roleconfig.after_loop
     async def update_roleconfig_finish(self):
         print(timestring(), "roleconfig update loop has ended")
-        self.update_roleconfig.restart()
+        self.update_roleconfig.start()
 
 
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
