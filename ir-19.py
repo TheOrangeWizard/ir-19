@@ -435,14 +435,42 @@ async def restart(ctx):
     if loops is not None:
         try:
             loops.process_discord_queue.restart()
+            await ctx.channel.send("discord queue restarted")
         except Exception as e:
             print(e)
+            await ctx.channel.send("discord queue restart failed")
         try:
             loops.update_tablists.restart()
+            await ctx.channel.send("tablist restarted")
+        except Exception as e:
+            print(e)
+            await ctx.channel.send("tablist restart failed")
+        try:
+            loops.check_online.restart()
+            await ctx.channel.send("reconnection check restarted")
+        except Exception as e:
+            print(e)
+            await ctx.channel.send("reconnection check restart failed")
+    else:
+        print(timestring(), "this shouldn't happen")
+
+
+@bot.command(pass_context=True)
+@commands.has_permissions(administrator=True)
+async def stop(ctx):
+    """halts internal tasks for debug purposes"""
+    loops = bot.get_cog("Loops")
+    if loops is not None:
+        try:
+            loops.process_discord_queue.stop()
         except Exception as e:
             print(e)
         try:
-            loops.check_online.restart()
+            loops.update_tablists.stopt()
+        except Exception as e:
+            print(e)
+        try:
+            loops.check_online.stop()
         except Exception as e:
             print(e)
     else:
@@ -545,7 +573,10 @@ async def get(ctx):
                 role = int(i[0])
                 group = i[1]
                 rank = i[2]
-                message += bot.get_guild(config.guild).get_role(role).name + " " + group + " " + rank + "\n"
+                try:
+                    message += bot.get_guild(config.guild).get_role(role).name + " " + group + " " + rank + "\n"
+                except AttributeError:
+                    message += "DELETED ROLE " + group + " " + rank + "\n"
         await ctx.channel.send(message)
 
 
