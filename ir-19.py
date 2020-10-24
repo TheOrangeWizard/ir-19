@@ -251,28 +251,6 @@ class Loops(commands.Cog):
         await self.bot.wait_until_ready()
         print(timestring(), "roleconfig update loop has started")
 
-    # after loops
-
-    @process_discord_queue.after_loop
-    async def process_discord_queue_finish(self):
-        print(timestring(), "process discord queue loop has ended")
-        self.process_discord_queue.start()
-
-    @update_tablists.after_loop
-    async def update_tablists_finish(self):
-        print(timestring(), "tablist update loop has ended")
-        self.update_tablists.start()
-
-    @check_online.after_loop
-    async def check_online_finish(self):
-        print(timestring(), "check online loop has ended")
-        self.check_online.start()
-
-    @update_roleconfig.after_loop
-    async def update_roleconfig_finish(self):
-        print(timestring(), "roleconfig update loop has ended")
-        self.update_roleconfig.start()
-
 
 nl_ranks = ["none", "members", "mods", "admins", "owner"]
 bot = commands.Bot(command_prefix=config.prefix, description=config.motd)
@@ -393,6 +371,22 @@ async def on_ready():
 @bot.event
 async def on_disconnect():
     print(timestring(), "disconnected from discord")
+    loops = bot.get_cog("Loops")
+    if loops is not None:
+        try:
+            loops.process_discord_queue.restart()
+        except Exception as e:
+            print(e)
+        try:
+            loops.update_tablists.restart()
+        except Exception as e:
+            print(e)
+        try:
+            loops.check_online.restart()
+        except Exception as e:
+            print(e)
+    else:
+        print(timestring(), "this shouldn't happen")
 
 
 @bot.event
@@ -431,6 +425,28 @@ async def shutdown(ctx):
     await ctx.channel.send("emergency shutdown invoked")
     connection.disconnect(immediate=True)
     await bot.close()
+
+
+@bot.command(pass_context=True)
+@commands.has_permissions(administrator=True)
+async def restart(ctx):
+    """attempts to restart the minecraft connection"""
+    loops = bot.get_cog("Loops")
+    if loops is not None:
+        try:
+            loops.process_discord_queue.restart()
+        except Exception as e:
+            print(e)
+        try:
+            loops.update_tablists.restart()
+        except Exception as e:
+            print(e)
+        try:
+            loops.check_online.restart()
+        except Exception as e:
+            print(e)
+    else:
+        print(timestring(), "this shouldn't happen")
 
 
 @bot.command(pass_context=True)
