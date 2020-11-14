@@ -400,7 +400,7 @@ async def on_message(message):
 @bot.command(pass_context=True)
 async def test(ctx):
     """test"""
-    await ctx.channel.send(".")
+    await ctx.channel.send(str(connection.connected))
 
 
 @bot.command(pass_context=True)
