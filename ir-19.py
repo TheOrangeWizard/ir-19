@@ -404,12 +404,6 @@ async def test(ctx):
 
 
 @bot.command(pass_context=True)
-async def test2(ctx):
-    """test"""
-    record_spam()
-
-
-@bot.command(pass_context=True)
 @commands.has_permissions(administrator=True)
 async def send(ctx, *, arg):
     """send ingame chat"""
@@ -430,28 +424,10 @@ async def shutdown(ctx):
 @commands.has_permissions(administrator=True)
 async def restart(ctx):
     """attempts to restart the minecraft connection"""
-    loops = bot.get_cog("Loops")
-    if loops is not None:
-        try:
-            loops.process_discord_queue.restart()
-            await ctx.channel.send("discord queue restarted")
-        except Exception as e:
-            print(e)
-            await ctx.channel.send("discord queue restart failed")
-        try:
-            loops.update_tablists.restart()
-            await ctx.channel.send("tablist restarted")
-        except Exception as e:
-            print(e)
-            await ctx.channel.send("tablist restart failed")
-        try:
-            loops.check_online.restart()
-            await ctx.channel.send("reconnection check restarted")
-        except Exception as e:
-            print(e)
-            await ctx.channel.send("reconnection check restart failed")
-    else:
-        print(timestring(), "this shouldn't happen")
+    connection.disconnect()
+    await asyncio.sleep(15)
+    connection.auth_token.authenticate(config.username, config.password)
+    connection.connect()
 
 
 @bot.command(pass_context=True)
