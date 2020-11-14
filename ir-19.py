@@ -179,23 +179,25 @@ class Loops(commands.Cog):
 
     @tasks.loop(seconds=config.tablist_update_delay)
     async def update_tablists(self):
-        # print("tablist update loop debug message")
+        print("tablist update loop debug message")
         content = []
-        for uuid in connection.player_list.players_by_uuid.keys():
-            name = str(connection.player_list.players_by_uuid[uuid].name)
-            content.append(name)
-            try:
-                record_account(name)
-            except Exception as e:
-                print(timestring(), type(e), e)
-        n = str(len(content))
+        n = 0
+        if connection.spawned:
+            for uuid in connection.player_list.players_by_uuid.keys():
+                name = str(connection.player_list.players_by_uuid[uuid].name)
+                content.append(name)
+                try:
+                    record_account(name)
+                except Exception as e:
+                    print(timestring(), type(e), e)
+            n = str(len(content))
         content = clean("\n".join(sorted(content, key=str.casefold)))
         with open("tablists.txt", "r") as tablistfile:
             for tablist in tablistfile.readlines():
                 channel, messageid = tablist.strip().split(" ")
                 try:
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
-                    if connection.connected:
+                    if connection.spawned:
                         await message.edit(content="**" + n + " players:**\n"+content)
                     else:
                         await message.edit(content="connection error")
@@ -207,7 +209,7 @@ class Loops(commands.Cog):
     @tasks.loop(seconds=30)
     async def check_online(self):
         try:
-            if not connection.connected:
+            if not connection.spawned:
                 await self.bot.change_presence(activity=None)
             else:
                 await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
