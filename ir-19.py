@@ -360,15 +360,15 @@ async def on_ready():
     loops = bot.get_cog("Loops")
     if loops is not None:
         try:
-            loops.process_discord_queue.restart()
+            loops.process_discord_queue.start()
         except Exception as e:
             print(e)
         try:
-            loops.update_tablists.restart()
+            loops.update_tablists.start()
         except Exception as e:
             print(e)
         try:
-            loops.check_online.restart()
+            loops.check_online.start()
         except Exception as e:
             print(e)
     else:
