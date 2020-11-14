@@ -209,14 +209,6 @@ class Loops(commands.Cog):
         try:
             if not connection.connected:
                 await self.bot.change_presence(activity=None)
-                print(timestring(), "minecraft disconnected, reconnecting in", config.reconnect_timer, "seconds")
-                connection.auth_token.authenticate(config.username, config.password)
-                await asyncio.sleep(config.reconnect_timer)
-                try:
-                    print(timestring(), "connecting...")
-                    connection.connect()
-                except ConnectionRefusedError:
-                    print(timestring(), "host refused connection")
             else:
                 await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
         except Exception as e:
@@ -381,6 +373,8 @@ async def on_ready():
             print(e)
     else:
         print(timestring(), "this shouldn't happen")
+    connection.auth_token.authenticate(config.username, config.password)
+    connection.connect()
 
 
 # @bot.event
@@ -391,6 +385,7 @@ async def on_ready():
 @bot.event
 async def on_disconnect():
     print(timestring(), "disconnected from discord")
+    connection.disconnect()
 
 
 @bot.event
@@ -647,7 +642,6 @@ def handle_error(exc):
         print(timestring(), "connection not lost")
 
 
-authenticate()
 connection = Connection(config.host, config.port, auth_token=auth_token, handle_exception=handle_error)
 
 
@@ -751,6 +745,5 @@ if __name__ == "__main__":
         for acct in accountshelf.keys():
             account_cache.append(acct)
     print(timestring(), "account cache populated in", time.time()-a, "seconds")
-    connection.connect()
     discordThread = Thread(target=bot.run, args=[config.token])
     discordThread.run()
