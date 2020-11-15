@@ -182,7 +182,7 @@ class Loops(commands.Cog):
         print("tablist update loop debug message")
         content = []
         n = 0
-        if connection.spawned:
+        if connection.spawned and connection.connected:
             for uuid in connection.player_list.players_by_uuid.keys():
                 name = str(connection.player_list.players_by_uuid[uuid].name)
                 content.append(name)
@@ -209,8 +209,13 @@ class Loops(commands.Cog):
     @tasks.loop(seconds=30)
     async def check_online(self):
         try:
-            if not connection.spawned:
+            if not connection.spawned and connection.connected:
                 await self.bot.change_presence(activity=None)
+                connection.disconnect()
+                print(timestring(), "disconnected from", connection.options.address)
+                print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
+                await asyncio.sleep(config.reconnect_timer)
+                connection.connect()
             else:
                 await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
         except Exception as e:
@@ -375,8 +380,6 @@ async def on_ready():
             print(e)
     else:
         print(timestring(), "this shouldn't happen")
-    connection.auth_token.authenticate(config.username, config.password)
-    connection.connect()
 
 
 # @bot.event
@@ -387,7 +390,6 @@ async def on_ready():
 @bot.event
 async def on_disconnect():
     print(timestring(), "disconnected from discord")
-    connection.disconnect()
 
 
 @bot.event
