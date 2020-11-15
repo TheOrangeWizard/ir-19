@@ -179,7 +179,7 @@ class Loops(commands.Cog):
 
     @tasks.loop(seconds=config.tablist_update_delay)
     async def update_tablists(self):
-        print("tablist update loop debug message")
+        # print("tablist update loop debug message")
         content = []
         n = 0
         if connection.spawned and connection.connected:
