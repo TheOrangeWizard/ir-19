@@ -215,6 +215,7 @@ class Loops(commands.Cog):
                 print(timestring(), "disconnected from", connection.options.address)
                 print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
                 await asyncio.sleep(config.reconnect_timer)
+                connection.auth_token.authenticate(config.username, config.password)
                 connection.connect()
             else:
                 await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
@@ -380,6 +381,8 @@ async def on_ready():
             print(e)
     else:
         print(timestring(), "this shouldn't happen")
+    connection.auth_token.authenticate(config.username, config.password)
+    connection.connect()
 
 
 # @bot.event
