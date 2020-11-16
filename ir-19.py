@@ -208,7 +208,7 @@ class Loops(commands.Cog):
                 except Exception as e:
                     print(timestring(), type(e), e)
 
-    @tasks.loop(seconds=30)
+    @tasks.loop(seconds=config.reconnect_timer)
     async def check_online(self):
         try:
             if not connection.spawned and connection.connected:
@@ -216,7 +216,7 @@ class Loops(commands.Cog):
                 connection.disconnect()
                 print(timestring(), "disconnected from", connection.options.address)
                 print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
-                await asyncio.sleep(config.reconnect_timer)
+                await asyncio.sleep(config.reconnect_timer/2)
                 connection.auth_token.authenticate(config.username, config.password)
                 connection.connect()
             else:
