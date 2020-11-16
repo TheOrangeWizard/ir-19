@@ -212,7 +212,7 @@ class Loops(commands.Cog):
     @tasks.loop(seconds=config.reconnect_timer)
     async def check_online(self):
         try:
-            if not connection.spawned and not connection.connected:
+            if not (connection.spawned and connection.connected):
                 await self.bot.change_presence(activity=None)
                 connection.disconnect()
                 print(timestring(), "disconnected from", connection.options.address)
