@@ -713,7 +713,7 @@ def parse_snitch(chat):
     snitch_name = split_chat[2][2:]
     distance = split_chat[4].split(" ")[0][2:][:-1]
     direction = split_chat[4].split(" ")[1][1:][:-2]
-    coords = [int(i) for i in split_chat[3][3:][:-1].split(" ")]
+    coords = split_chat[3][3:][:-1].split(" ")
     text = account + " " + action + " at " + snitch_name + " " + coords
     print(text)
     ds_queue.put({"type": "SNITCH", "message": text})
