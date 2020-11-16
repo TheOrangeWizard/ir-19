@@ -381,8 +381,6 @@ async def on_ready():
             print(e)
     else:
         print(timestring(), "this shouldn't happen")
-    connection.auth_token.authenticate(config.username, config.password)
-    connection.connect()
 
 
 # @bot.event
@@ -431,6 +429,7 @@ async def shutdown(ctx):
 @commands.has_permissions(administrator=True)
 async def restart(ctx):
     """attempts to restart the minecraft connection"""
+    await ctx.channel.send("attempting to restart connection to " + connection.options.address)
     connection.disconnect()
     await asyncio.sleep(15)
     connection.auth_token.authenticate(config.username, config.password)
@@ -448,7 +447,7 @@ async def stop(ctx):
         except Exception as e:
             print(e)
         try:
-            loops.update_tablists.stopt()
+            loops.update_tablists.stop()
         except Exception as e:
             print(e)
         try:
@@ -710,7 +709,9 @@ def parse_snitch(chat):
     distance = split_chat[4].split(" ")[0][2:][:-1]
     direction = split_chat[4].split(" ")[1][1:][:-2]
     coords = split_chat[3][3:][:-1].split(" ")
-    print(account, action, "at", snitch_name, coords)
+    text = account + " " + action + " at " + snitch_name + " " + coords
+    print(text)
+    await bot.get_channel(config.snitch_channel).send(text)
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
@@ -728,5 +729,7 @@ if __name__ == "__main__":
         for acct in accountshelf.keys():
             account_cache.append(acct)
     print(timestring(), "account cache populated in", time.time()-a, "seconds")
+    connection.auth_token.authenticate(config.username, config.password)
+    connection.connect()
     discordThread = Thread(target=bot.run, args=[config.token])
     discordThread.run()
