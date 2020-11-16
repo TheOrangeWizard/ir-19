@@ -681,7 +681,7 @@ def on_chat(chat_packet):
     if not source == "GAME_INFO":
         print(timestring(), source, chat)
         if chat[:2] == "§6":
-            parse_snitch(chat)
+            await parse_snitch(chat)
         if config.relay_chat:
             ds_queue.put({"type": "CHAT", "channel": config.spam_channel, "message": chat})
         if not nllm["group"] == "":
@@ -701,7 +701,7 @@ def on_mc_disconnect(disconnect_packet):
     connection.__setattr__("player_list", packets.clientbound.play.PlayerListItemPacket.PlayerList())
 
 
-def parse_snitch(chat):
+async def parse_snitch(chat):
     split_chat = [i.strip() for i in chat.split("  ")]
     action = split_chat[0][2:]
     account = split_chat[1][2:]
