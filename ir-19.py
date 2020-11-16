@@ -216,8 +216,8 @@ class Loops(commands.Cog):
                 await self.bot.change_presence(activity=None)
                 connection.disconnect()
                 print(timestring(), "disconnected from", connection.options.address)
-                print(timestring(), "reconnecting in", config.reconnect_timer, "seconds")
-                await asyncio.sleep(config.reconnect_timer/2)
+                print(timestring(), "reconnecting in", int(config.reconnect_timer/2), "seconds")
+                await asyncio.sleep(int(config.reconnect_timer/2))
                 connection.auth_token.authenticate(config.username, config.password)
                 connection.connect()
             else:
