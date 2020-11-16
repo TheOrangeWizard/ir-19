@@ -174,6 +174,7 @@ class Loops(commands.Cog):
     async def process_discord_queue(self):
         if ds_queue.qsize() > 0:
             package = ds_queue.get()
+            print(timestring(), package)
             if package["type"] == "CHAT":
                 await self.bot.get_channel(config.spam_channel).send(clean(package["message"]))
             elif package["type"] == "SNITCH":
@@ -183,7 +184,7 @@ class Loops(commands.Cog):
     async def update_tablists(self):
         # print("tablist update loop debug message")
         content = []
-        n = 0
+        n = "0"
         if connection.spawned and connection.connected:
             for uuid in connection.player_list.players_by_uuid.keys():
                 name = str(connection.player_list.players_by_uuid[uuid].name)
@@ -707,16 +708,19 @@ def on_mc_disconnect(disconnect_packet):
 
 
 def parse_snitch(chat):
-    split_chat = [i.strip() for i in chat.split("  ")]
-    action = split_chat[0][2:]
-    account = split_chat[1][2:]
-    snitch_name = split_chat[2][2:]
-    distance = split_chat[4].split(" ")[0][2:][:-1]
-    direction = split_chat[4].split(" ")[1][1:][:-2]
-    coords = split_chat[3][3:][:-1].split(" ")
-    text = account + " " + action + " at " + snitch_name + " " + str(coords)
-    print(text)
-    ds_queue.put({"type": "SNITCH", "message": text})
+    try:
+        split_chat = [i.strip() for i in chat.split("  ")]
+        action = str(split_chat[0][2:])
+        account = str(split_chat[1][2:])
+        snitch_name = str(split_chat[2][2:])
+        distance = str(split_chat[4].split(" ")[0][2:][:-1])
+        direction = str(split_chat[4].split(" ")[1][1:][:-2])
+        coords = split_chat[3][3:][:-1].split(" ")
+        text = account + " " + action + " at " + snitch_name + " " + str(coords)
+        print(text)
+        ds_queue.put({"type": "SNITCH", "message": text})
+    except Exception as e:
+        print(timestring(), "snitch error", type(e), e)
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
