@@ -176,6 +176,8 @@ class Loops(commands.Cog):
             package = ds_queue.get()
             if package["type"] == "CHAT":
                 await self.bot.get_channel(config.spam_channel).send(clean(package["message"]))
+            elif package["type"] == "SNITCH":
+                await self.bot.get_channel(config.snitch_channel).send(clean(package["message"]))
 
     @tasks.loop(seconds=config.tablist_update_delay)
     async def update_tablists(self):
@@ -681,7 +683,7 @@ def on_chat(chat_packet):
     if not source == "GAME_INFO":
         print(timestring(), source, chat)
         if chat[:2] == "§6":
-            await parse_snitch(chat)
+            parse_snitch(chat)
         if config.relay_chat:
             ds_queue.put({"type": "CHAT", "channel": config.spam_channel, "message": chat})
         if not nllm["group"] == "":
@@ -701,7 +703,7 @@ def on_mc_disconnect(disconnect_packet):
     connection.__setattr__("player_list", packets.clientbound.play.PlayerListItemPacket.PlayerList())
 
 
-async def parse_snitch(chat):
+def parse_snitch(chat):
     split_chat = [i.strip() for i in chat.split("  ")]
     action = split_chat[0][2:]
     account = split_chat[1][2:]
@@ -711,7 +713,7 @@ async def parse_snitch(chat):
     coords = [int(i) for i in split_chat[3][3:][:-1].split(" ")]
     text = account + " " + action + " at " + snitch_name + " " + coords
     print(text)
-    await bot.get_channel(config.snitch_channel).send(text)
+    ds_queue.put({"type": "SNITCH", "message": text})
 
 
 connection.register_packet_listener(on_incoming, packets.Packet, early=True)
