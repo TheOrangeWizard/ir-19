@@ -174,11 +174,11 @@ class Loops(commands.Cog):
     async def process_discord_queue(self):
         if ds_queue.qsize() > 0:
             package = ds_queue.get()
-            print(timestring(), package)
+            # print(timestring(), package)
             if package["type"] == "CHAT":
                 await self.bot.get_channel(config.spam_channel).send(clean(package["message"]))
             elif package["type"] == "SNITCH":
-                await self.bot.get_channel(config.snitch_channel).send(clean(package["message"]))
+                await self.bot.get_channel(config.snitch_channel).send(package["message"])
 
     @tasks.loop(seconds=config.tablist_update_delay)
     async def update_tablists(self):
@@ -715,8 +715,8 @@ def parse_snitch(chat):
         snitch_name = str(split_chat[2][2:])
         distance = str(split_chat[4].split(" ")[0][2:][:-1])
         direction = str(split_chat[4].split(" ")[1][1:][:-2])
-        coords = split_chat[3][3:][:-1].split(" ")
-        text = account + " " + action + " at " + snitch_name + " " + str(coords)
+        coords = [int(i) for i in split_chat[3][3:][:-1].split(" ")]
+        text = "`**" + account + "** " + action + " at **" + snitch_name + "** " + str(coords) + "`"
         print(text)
         ds_queue.put({"type": "SNITCH", "message": text})
     except Exception as e:
