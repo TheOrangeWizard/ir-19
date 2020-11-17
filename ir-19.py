@@ -201,9 +201,12 @@ class Loops(commands.Cog):
                 try:
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
                     if connection.spawned:
-                        await message.edit(content="**" + n + " players:**\n"+content)
+                        await message.edit(content="**" + connection.options.address + " server info**\n" +
+                                                   "`Last updated " + timestring() + "`\n\n**" +
+                                                   n + " players:**\n" + content)
                     else:
-                        await message.edit(content="connection error")
+                        await message.edit(content="**" + connection.options.address + " server info**\n" +
+                                                   "`Last updated " + timestring() + "`\n\n" + "connection error")
                 except discord.errors.NotFound:
                     pass
                 except Exception as e:
@@ -710,7 +713,15 @@ def on_mc_disconnect(disconnect_packet):
 def parse_snitch(chat):
     try:
         split_chat = [i.strip() for i in chat.split("  ")]
-        action = str(split_chat[0][2:])
+        act = str(split_chat[0])
+        if "Enter" in act:
+            action = "Enter"
+        elif "Login" in act:
+            action = "Login"
+        elif "Logout" in act:
+            action = "Logout"
+        else:
+            action = act
         account = str(split_chat[1][2:])
         snitch_name = str(split_chat[2][2:])
         distance = str(split_chat[4].split(" ")[0][2:][:-1])
