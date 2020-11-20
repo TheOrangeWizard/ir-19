@@ -200,13 +200,13 @@ class Loops(commands.Cog):
                 channel, messageid = tablist.strip().split(" ")
                 try:
                     message = await self.bot.get_channel(int(channel)).fetch_message(int(messageid))
-                    if connection.spawned:
+                    if connection.spawned and connection.connected and not n == "0":
                         await message.edit(content="**" + connection.options.address + " server info**\n" +
-                                                   "`Last updated " + timestring() + "`\n\n**" +
+                                                   "Last updated `" + timestring() + "` NZT\n\n**" +
                                                    n + " players:**\n" + content)
                     else:
                         await message.edit(content="**" + connection.options.address + " server info**\n" +
-                                                   "`Last updated " + timestring() + "`\n\n" + "connection error")
+                                                   "Last updated `" + timestring() + "` NZT\n\n" + "connection error")
                 except discord.errors.NotFound:
                     pass
                 except Exception as e:
@@ -215,16 +215,16 @@ class Loops(commands.Cog):
     @tasks.loop(seconds=config.reconnect_timer)
     async def check_online(self):
         try:
-            if not (connection.spawned and connection.connected):
+            if connection.spawned and connection.connected:
+                await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
+            else:
                 await self.bot.change_presence(activity=None)
                 connection.disconnect()
                 print(timestring(), "disconnected from", connection.options.address)
-                print(timestring(), "reconnecting in", int(config.reconnect_timer/2), "seconds")
-                await asyncio.sleep(int(config.reconnect_timer/2))
+                print(timestring(), "reconnecting in", int(config.reconnect_timer / 2), "seconds")
+                await asyncio.sleep(int(config.reconnect_timer / 2))
                 connection.auth_token.authenticate(config.username, config.password)
                 connection.connect()
-            else:
-                await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
         except Exception as e:
             print(timestring(), e)
 
@@ -728,8 +728,9 @@ def parse_snitch(chat):
         direction = str(split_chat[4].split(" ")[1][1:][:-2])
         coords = [int(i) for i in split_chat[3][3:][:-1].split(" ")]
         text = "**" + account + "** " + action + " at **" + snitch_name + "** `" + str(coords) + "`"
-        print(text)
-        ds_queue.put({"type": "SNITCH", "message": text})
+        # print(text)
+        if snitch_name not in config.snitch_blacklist:
+            ds_queue.put({"type": "SNITCH", "message": text})
     except Exception as e:
         print(timestring(), "snitch error", type(e), e)
 
