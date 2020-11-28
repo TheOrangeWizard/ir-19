@@ -504,6 +504,18 @@ async def get_id(ctx, *, arg):
 
 @bot.command(pass_context=True)
 @commands.has_permissions(manage_messages=True)
+async def blacklist(ctx, *, arg):
+    """adds a snitch name to the relay blacklist"""
+    try:
+        with open("snitchblacklist.txt", "a") as file:
+            file.write(arg)
+        ctx.channel.send(arg + " added to snitch relay blacklist")
+    except Exception as e:
+        await ctx.channel.send(e)
+
+
+@bot.command(pass_context=True)
+@commands.has_permissions(manage_messages=True)
 async def associate(ctx, *args):
     """associates two given minecraft accounts"""
     if len(args) == 2:
@@ -729,8 +741,9 @@ def parse_snitch(chat):
         coords = [int(i) for i in split_chat[3][3:][:-1].split(" ")]
         text = "**" + account + "** " + action + " at **" + snitch_name + "** `" + str(coords) + "`"
         # print(text)
-        if snitch_name not in config.snitch_blacklist:
-            ds_queue.put({"type": "SNITCH", "message": text})
+        with open("snitchblacklist.txt", "r") as blacklist:
+            if snitch_name + "\n" not in blacklist.readlines():
+                ds_queue.put({"type": "SNITCH", "message": text})
     except Exception as e:
         print(timestring(), "snitch error", type(e), e)
 
