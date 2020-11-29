@@ -742,7 +742,7 @@ def parse_snitch(chat):
         text = "**" + account + "** " + action + " at **" + snitch_name + "** `" + str(coords) + "`"
         # print(text)
         with open("snitchblacklist.txt", "r") as blacklist:
-            if snitch_name + "\n" not in blacklist.readlines():
+            if snitch_name not in [name.strip() for name in blacklist.readlines()]:
                 ds_queue.put({"type": "SNITCH", "message": text})
     except Exception as e:
         print(timestring(), "snitch error", type(e), e)
