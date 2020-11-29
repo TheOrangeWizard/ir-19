@@ -508,7 +508,7 @@ async def blacklist(ctx, *, arg):
     """adds a snitch name to the relay blacklist"""
     try:
         with open("snitchblacklist.txt", "a") as file:
-            file.write(arg)
+            file.write(arg + "\n")
         await ctx.channel.send(arg + " added to snitch relay blacklist")
     except Exception as e:
         await ctx.channel.send(e)
