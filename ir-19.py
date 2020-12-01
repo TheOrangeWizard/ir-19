@@ -724,7 +724,9 @@ def on_chat(chat_packet):
         if not nllm["group"] == "":
             if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
                 nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
-        if words[0] == "[!]" and random.randrange(1000) == 0:
+        if words[0] == "[!]" and words[2] == "%wiard":
+            send_chat("/g ! " + wiardify(" ".join(words[3:])))
+        elif words[0] == "[!]" and random.randrange(500) == 0:
             send_chat("/g ! " + wiardify(" ".join(words[2:])))
 
 
