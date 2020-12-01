@@ -725,7 +725,7 @@ def on_chat(chat_packet):
             if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
                 nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
         if words[0] == "[!]" and random.randrange(1000) == 0:
-            send_chat(wiardify(" ".join(words[2:])))
+            send_chat("/g ! " + wiardify(" ".join(words[2:])))
 
 
 def on_player_list_item(player_list_item_packet):
