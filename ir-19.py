@@ -8,6 +8,7 @@ import shelve
 import asyncio
 import datetime
 import discord
+import random
 
 from discord.ext import commands, tasks
 from threading import Thread
@@ -35,6 +36,21 @@ def timestring():
 def datestring():
     mtime = datetime.datetime.now()
     return "[{:%d/%m/%y}]".format(mtime)
+
+
+def wiardify(text):
+    vowels = "aeiouy"
+    consonants = "bcdfghjklmnpqrstvwxyz"
+    t2 = ""
+    for i in range(len(text)):
+        try:
+            if text[i-1].lower() in vowels and text[i+1].lower() in vowels and text[i].lower() in consonants:
+                pass
+            else:
+                t2 += text[i]
+        except:
+            t2 += text[i]
+    return t2
 
 
 def record_account(acct):
@@ -708,6 +724,8 @@ def on_chat(chat_packet):
         if not nllm["group"] == "":
             if len(words) == 2 and words[1] in ["(OWNER)", "(ADMINS)", "(MODS)", "(MEMBERS)"]:
                 nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
+        if words[0] == "[!]" and random.randrange(1000) == 0:
+            send_chat(wiardify(" ".join(words[2:])))
 
 
 def on_player_list_item(player_list_item_packet):
