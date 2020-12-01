@@ -671,7 +671,7 @@ def send_chat(message):
         nllm["group"] = sm[1].lower()
         nllm["data"][sm[1].lower()] = {}
         nllm["time"] = time.time()
-    print(timestring(), "ingame:", message)
+    print(timestring(), "ingame:", message, flush=True)
     packet = packets.serverbound.play.ChatPacket()
     packet.message = message
     connection.write_packet(packet)
@@ -716,7 +716,7 @@ def on_chat(chat_packet):
     chat = parse(raw_chat)
     words = chat.split(" ")
     if not source == "GAME_INFO":
-        print(timestring(), source, chat)
+        print(timestring(), source, chat, flush=True)
         if chat[:2] == "§6":
             parse_snitch(chat)
         if config.relay_chat:
@@ -726,7 +726,7 @@ def on_chat(chat_packet):
                 nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
         if words[0] == "[!]" and words[2] == "%wiard":
             send_chat("/g ! " + wiardify(" ".join(words[3:])))
-        elif words[0] == "[!]" and random.randrange(500) == 0:
+        elif words[0] == "[!]" and random.randrange(100) == 0:
             send_chat("/g ! " + wiardify(" ".join(words[2:])))
 
 
