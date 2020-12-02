@@ -716,7 +716,8 @@ def on_chat(chat_packet):
     chat = parse(raw_chat)
     words = chat.split(" ")
     if not source == "GAME_INFO":
-        print(timestring(), source, chat, flush=True)
+        print("{} {} {}".format(timestring(), source, chat))
+        sys.stdout.flush()
         if chat[:2] == "§6":
             parse_snitch(chat)
         if config.relay_chat:
