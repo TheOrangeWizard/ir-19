@@ -235,7 +235,7 @@ class Loops(commands.Cog):
                 await self.bot.change_presence(activity=discord.Game("mc.civclassic.com"))
             else:
                 await self.bot.change_presence(activity=None)
-                connection.disconnect()
+                connection.disconnect(immediate=True)
                 print(timestring(), "disconnected from", connection.options.address)
                 print(timestring(), "reconnecting in", int(config.reconnect_timer / 2), "seconds")
                 await asyncio.sleep(int(config.reconnect_timer / 2))
@@ -727,7 +727,7 @@ def on_chat(chat_packet):
                 nllm["data"][nllm["group"]][words[0].lower()] = words[1].lower().strip("()")
         if words[0] == "[!]" and words[2] == "%wiard":
             send_chat("/g ! " + wiardify(" ".join(words[3:])))
-        elif words[0] == "[!]" and random.randrange(100) == 0:
+        elif words[0] == "[!]" and random.randrange(10000) == 0:
             send_chat("/g ! " + wiardify(" ".join(words[2:])))
 
 
